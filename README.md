@@ -1,1 +1,1 @@
-# nats-spark-connector
+# Experimental nats-spark-connector
