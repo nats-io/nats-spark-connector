@@ -103,22 +103,22 @@ The 'format'  configuration should be **always set** to "natsJS", which will tie
 Spark to this connector implementation.
 
 Possible options are:
-- "nats.host"
+- **"nats.host"**
 The IP or DNS alias where Nats is installed.
 
-- "nats.port"
+- **"nats.port"**
 The port to which the connector should listen.
 
-- "nats.stream.prefix"
+- **"nats.stream.prefix"**
 The JetStream string prefix to which Nats will append partion numbers starting
 from zero (0).
 
-- "nats.num.partitions"
+- **"nats.num.partitions"**
 The number of JetStream partitions. Nats will append partition numbers to the
 JetStream string prefix, from zero (0) to 'nats.num.partitions - 1'.
 Default is '1'.
 
-- "nats.reset.on.restart"
+- **"nats.reset.on.restart"**
 If set to 'true' the connector will start reading from the top of each partition
 at every Spark restart. Otherwise (set to 'false') the connector will
 continue from the next message after each partition's last-read offset, e.g.
@@ -126,15 +126,15 @@ if '30' was the last message offset read before Spark went down, then after
 restart the connector will start reading from message offset '31'. This is the
 usual Fault Tolerance (FT) recovery mode.
 
-- "nats.allow.reconnect"
+- **"nats.allow.reconnect"**
 Default is 'true'. A 'true' setting will allow for infinite reconnects.
 
--  "nats.connection.timeout"
+-  **"nats.connection.timeout"**
 Set the timeout for connection attempts. Each server in the options is allowed
 this timeout so if 3 servers are tried with a timeout of 5s the total time
 could be 15s. Default is 20 seconds.
 
-- "nats.ping.interval"
+- **"nats.ping.interval"**
 Set the interval between attempts to pings the server. These pings are
 automated, and capped by maxPingsOut(). As of 2.4.4 the library may wait up to
 2 * time to send a ping. Incoming traffic from the server can postpone the next
@@ -147,7 +147,7 @@ messages being held back or failed. In general, the ping interval should be set
 in seconds but this value is not enforced as it would result in an API change
 from the 2.0 release. Default is 10 seconds.
 
-- "nats.reconnect.wait"
+- **"nats.reconnect.wait"**
 Set the time to wait between reconnect attempts to the same server. This
 setting is only used by the client when the same server appears twice in the
 reconnect attempts, either because it is the only known server or by random
@@ -174,10 +174,10 @@ Spark to this connector implementation. The option "checkpointLocation" is a
 Spark setting indicating where checkpoints should be stored.
 
 Possible options are:
-  - "nats.host"
+  - **"nats.host"**
 The IP or DNS alias where Nats is installed.
 
-  - "nats.port"
+  - **"nats.port"**
 The port to which the connector should listen.
 
 ## Simple Connector Test
