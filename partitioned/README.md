@@ -1,10 +1,10 @@
 # NATS-SPARK CONNECTOR
 
 ## Overview
-This flavor of Nats-Spark connector maps JetStream partitions to a Spark
+This flavor of NATS-Spark connector maps JetStream partitions to a Spark
 micro-batch streaming job.
 
-On the Nats side, JetStream partitions should consist of a string prefix followed
+On the NATS side, JetStream partitions should consist of a string prefix followed
 by an appended hyphen and a partition number starting from zero (0). For example,
 if "JSPartition" is chosen as the string prefix, and three (3) partitions are
 desired, then partitions should be named "JSPartition-0", "JSPartition-1", and
@@ -22,39 +22,39 @@ micro-batch input Dataframe, one message per row, that will have as columns the
 'subject' from which the message was obtained, the message 'dateTime' obtained
 from the message metadata, and the message 'content'.
 
-If so desired, one may publish to Nats messages out of Spark, i.e. stream sink,
+If so desired, one may publish to NATS messages out of Spark, i.e. stream sink,
 via options in the Spark Session 'writeStream' configuration. The output
-Dataframe should have the same format as the input from Nats, i.e. 'subject' as
+Dataframe should have the same format as the input from NATS, i.e. 'subject' as
 the first column, 'dateTime' as the second column, and 'content' as the third
 column. The connector will add the dateTime to the message header, then send
 the content to the specified subject. Please refer to option configurations in
 the 'Spark Streaming Sink Options' section.
 
-## Spark and Nats Documentation
+## Spark and NATS Documentation
 For general Spark development tips, including info on development using an IDE,
 see ["Useful Developer Tools"](https://spark.apache.org/developer-tools.html).
 
-For general Nats development tips, see ["Nats Docs"](https://docs.nats.io).
+For general NATS development tips, see ["NATS Docs"](https://docs.nats.io).
 
 ## Setting Up For Connector Utilization
 ### Sample Spark Configuration
 A Spark configuration will consist of a driver and workers. The number of workers
-**does not** have to match the number of Nats partitions. Once a Nats-sent batch
+**does not** have to match the number of Nats partitions. Once a NATS-sent batch
 of messages gets converted and aggregated into a single Dataframe Spark will
 partition work on the Dataframe across all its workers.
 
 A sample Spark Docker configuration for a master and two workers can be found in
 this repository at src/test/resources/docker-compose.yml.
 
-### Sample Nats Configuration
-As previously described, a Nats configuration for the connector will consist
+### Sample NATS Configuration
+As previously described, a NATS configuration for the connector will consist
 of JetStream partitions in the form <partition string prefix>-<partition number>.
 For example, if "JSPartition" is chosen as the string prefix, and three (3)
 partitions are desired, then partitions should be named "JSPartition-0",
 "JSPartition-1", and "JSPartition-2". Appropriate subjects should be assigned to
 each partition as needed.
 
-Sample Nats configuration scripts for Linux and MacOS can be found in this
+Sample NATS configuration scripts for Linux and MacOS can be found in this
 repository at src/test/resources/create_partition_streams-linux.bash and at
 src/test/resources/create_partition_streams-macos.bash.
 
@@ -85,7 +85,7 @@ val spark = SparkSession
 
 
 ### Spark Streaming Source Options
-An example Scala source configuration for the Nats connector follows:
+An example Scala source configuration for the NATS connector follows:
 ```
 val inboundDF = spark
     .readStream
@@ -98,23 +98,23 @@ val inboundDF = spark
     .load()
 ```
 where 'inboundDF' is the Dataframe obtained at each micro-batch acquisition
-iteration, and Nats is configured for localhost access.
+iteration, and NATS is configured for localhost access.
 The 'format'  configuration should be **always set** to "natsJS", which will tie
 Spark to this connector implementation.
 
 Possible options are:
 - **"nats.host"**
-The IP or DNS alias where Nats is installed.
+The IP or DNS alias where NATS is installed.
 
 - **"nats.port"**
 The port to which the connector should listen.
 
 - **"nats.stream.prefix"**
-The JetStream string prefix to which Nats will append partion numbers starting
+The JetStream string prefix to which NATS will append partion numbers starting
 from zero (0).
 
 - **"nats.num.partitions"**
-The number of JetStream partitions. Nats will append partition numbers to the
+The number of JetStream partitions. NATS will append partition numbers to the
 JetStream string prefix, from zero (0) to 'nats.num.partitions - 1'.
 Default is '1'.
 
@@ -156,7 +156,7 @@ it is performed once at the start, so if there are 2 servers in the list you
 will never encounter the reconnect wait. Default is 20 seconds.
 
 ### Spark Streaming Sink Options
-An example Scala sink configuration for the Nats connector follows:
+An example Scala sink configuration for the NATS connector follows:
 ```
 outboundDF.writeStream
   .outputMode("append") // only send new messages
@@ -168,14 +168,14 @@ outboundDF.writeStream
   .awaitTermination()
 ```
 where 'outboundDF' is the Dataframe containing the output messages in the format
-captured in the 'Overview' section, and Nats is configured for localhost access.
+captured in the 'Overview' section, and NATS is configured for localhost access.
 The 'format'  configuration should be **always set** to "natsJS", which will tie
 Spark to this connector implementation. The option "checkpointLocation" is a
 Spark setting indicating where checkpoints should be stored.
 
 Possible options are:
   - **"nats.host"**
-The IP or DNS alias where Nats is installed.
+The IP or DNS alias where NATS is installed.
 
   - **"nats.port"**
 The port to which the connector should listen.
