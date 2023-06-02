@@ -1,13 +1,13 @@
 # NATS-SPARK CONNECTOR
 
 ## Overview
-In this flavor, Nats utilizes a single JetStream partition, using a durable
+In this flavor, NATS utilizes a single JetStream partition, using a durable
 and queued configuration to load balance messages across Spark threads, each
 thread contributing to single streaming micro-batch Dataframe at each Spark "pull".
 
-Current message offset is kept in the Nats queue for the purpose of fault tolerance
+Current message offset is kept in the NATS queue for the purpose of fault tolerance
 (FT). Spark simply acknowledges each message during a micro-batch 'commit', and
-Nats resends a message if an ack is not received within a pre-set, configurable
+NATS resends a message if an ack is not received within a pre-set, configurable
 timeframe.
 
 There is no need to pre-create the stream, queue, and durable.
@@ -17,36 +17,36 @@ of the stream subjects the connector should utilize to acquire messages.
 Multiple subjects may be configured using wildcards if so desired. Please refer
 to option configurations in the 'Spark Streaming Source Options' section.
 
-If so desired, one may publish to Nats messages out of Spark, i.e. stream sink,
+If so desired, one may publish to NATS messages out of Spark, i.e. stream sink,
 via options in the Spark Session 'writeStream' configuration. The output
-Dataframe should have the same format as the input from Nats, i.e. 'subject' as
+Dataframe should have the same format as the input from NATS, i.e. 'subject' as
 the first column, 'dateTime' as the second column, and 'content' as the third
 column. The connector will add the dateTime to the message header, then send
 the content to the specified subject. Please refer to option configurations in
 the 'Spark Streaming Sink Options' section.
 
-## Spark and Nats Documentation
+## Spark and NATS Documentation
 For general Spark development tips, including info on development using an IDE,
 see ["Useful Developer Tools"](https://spark.apache.org/developer-tools.html).
 
-For general Nats development tips, see ["Nats Docs"](https://docs.nats.io).
+For general NATS development tips, see ["NATS Docs"](https://docs.nats.io).
 
 ## Setting Up For Connector Utilization
 ### Sample Spark Configuration
 A Spark configuration will consist of a driver and workers. The number of workers
-**does not** have to match the number of Nats listeners. The connector utilizes
-listeners, one per thread, to pull Nats messages. Once a Nats-sent batch
+**does not** have to match the number of NATS listeners. The connector utilizes
+listeners, one per thread, to pull NATS messages. Once a NATS-sent batch
 of messages gets converted and aggregated into a single Dataframe Spark will
 partition work on the Dataframe across all its workers.
 
 A sample Spark Docker configuration for a master and two workers can be found in
 this repository at src/test/resources/docker-compose.yml.
 
-### Sample Nats Configuration
-As previously described, a Nats configuration for the connector will basically
+### Sample NATS Configuration
+As previously described, a NATS configuration for the connector will basically
 consist of setting up a JetStream stream name, and a list of comma-separated
 subjects that may use wildcards. The user should also setup an ack wait time,
-which is the maximum time Nats will wait for a message acknowledgement before
+which is the maximum time NATS will wait for a message acknowledgement before
 resending a message. These and other configurations are described in the
 'Spark Streaming Source Options' section.
 
@@ -77,7 +77,7 @@ val spark = SparkSession
 
 
 ### Spark Streaming Source Options
-An example Scala source configuration for the Nats connector follows:
+An example Scala source configuration for the NATS connector follows:
 ```
 val initDF = spark
     .readStream
@@ -94,13 +94,13 @@ val initDF = spark
     .load()
 ```
 where 'initDF' is the Dataframe obtained at each micro-batch acquisition
-iteration, and Nats is configured for localhost access.
+iteration, and NATS is configured for localhost access.
 The 'format'  configuration should be **always set** to "nats", which will tie
 Spark to this connector implementation.
 
 Possible options are:
 - "nats.host"
-  The IP or DNS alias where Nats is installed. Obligatory configuration.
+  The IP or DNS alias where NATS is installed. Obligatory configuration.
 
 - "nats.port"
   The port to which the connector should listen. Obligatory configuration.
@@ -124,13 +124,13 @@ Possible options are:
   (see "nats.stream.subjects"). Default is 1 listener.
 
 - "nats.msg.ack.wait.secs"
-  The amount of time the Nats server will wait for acknowledgement before resending
+  The amount of time the NATS server will wait for acknowledgement before resending
   a message. Spark commits a micro-batch at the end of the batch processing.
-  At that point the connector sends an ack per message to the Nats server to
+  At that point the connector sends an ack per message to the NATS server to
   indicate the messages have been processed. Make sure the ack wait time is
   greater than the maximum expected time for Spark batch processing. Repeated
   messages may be a good indication that the ack wait time is too short, and
-  Nats is resending messages for which it has not gotten acks. Default is 60
+  NATS is resending messages for which it has not gotten acks. Default is 60
   seconds.
 
 - "nats.msg.fetch.batch.size"
@@ -185,7 +185,7 @@ Possible options are:
   will never encounter the reconnect wait. Default is 20 seconds.
 
 ### Spark Streaming Sink Options
-An example Scala sink configuration for the Nats connector follows:
+An example Scala sink configuration for the NATS connector follows:
 ```
 outboundDF.writeStream
   .outputMode("append") // only send new messages
@@ -197,14 +197,14 @@ outboundDF.writeStream
   .awaitTermination()
 ```
   where 'outboundDF' is the Dataframe containing the output messages in the format
-  captured in the 'Overview' section, and Nats is configured for localhost access.
+  captured in the 'Overview' section, and NATS is configured for localhost access.
   The 'format'  configuration should be **always set** to "nats", which will tie
   Spark to this connector implementation. The option "checkpointLocation" is a
   Spark setting indicating where checkpoints should be stored.
 
   Possible options are:
   - "nats.host"
-    The IP or DNS alias where Nats is installed.
+    The IP or DNS alias where NATS is installed.
 
   - "nats.port"
     The port to which the connector should listen.
