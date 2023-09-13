@@ -211,18 +211,16 @@ class NatsConfig(isSource:Boolean) {
       builder = builder.maxReconnects(-1)
     }
 
-    if (
-      System.getenv("NATS_NKEY") != null && System.getenv("NATS_NKEY") != ""
-    ) {
+    if (System.getenv("NATS_NKEY") != null && System.getenv("NATS_NKEY") != "") {
       val handler: AuthHandler = new SampleAuthHandler(
         System.getenv("NATS_NKEY")
       )
       builder.authHandler(handler)
-    } else if (
-      System.getenv("NATS_CREDS") != null && System.getenv("NATS_CREDS") != ""
-    ) {
+    } else if (System.getenv("NATS_CREDS") != null && System.getenv("NATS_CREDS") != "") {
       builder.authHandler(Nats.credentials(System.getenv("NATS_CREDS")));
-    } else if (System.getenv("NATS_TLS_KEY_STORE") != null && System.getenv("NATS_TLS_KEY_STORE") != "" && System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
+    }
+
+    if (System.getenv("NATS_TLS_KEY_STORE") != null && System.getenv("NATS_TLS_KEY_STORE") != "" && System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
 
       val tlsAlgo = if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
         System.getenv("NATS_TLS_ALGO")
@@ -239,7 +237,6 @@ class NatsConfig(isSource:Boolean) {
       val trustStorePassword = if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
         System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray
       } else "".toCharArray
-
 
       val ctx = javax.net.ssl.SSLContext.getInstance(Options.DEFAULT_SSL_PROTOCOL)
 
