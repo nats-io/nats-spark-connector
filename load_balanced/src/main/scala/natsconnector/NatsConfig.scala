@@ -70,7 +70,7 @@ class NatsConfig(isSource: Boolean) {
   // ============== JetStream stream Config Values
   // TODO: add replication configuration
   var streamName: Option[String] = None // configurable
-  var storageType: StorageType = StorageType.Memory // configurable
+  var storageType: StorageType = StorageType.File // configurable
   var streamSubjects: Option[String] = None // configurable
   var durable: Option[String] = None // configurable
   val ackPolicy: AckPolicy =
@@ -187,9 +187,9 @@ class NatsConfig(isSource: Boolean) {
 
     try {
       val typeOfStorage: String = parameters("nats.storage.type")
-      // storage type default is set to 'memory'
-      if (typeOfStorage.trim().toLowerCase.equals("file"))
-        this.storageType = StorageType.File
+      // storage type default is set to 'file'
+      if (typeOfStorage.trim().toLowerCase.equals("memory"))
+        this.storageType = StorageType.Memory
     } catch {
       case e: NoSuchElementException =>
     }
@@ -356,19 +356,16 @@ class NatsConfig(isSource: Boolean) {
       builder = builder.maxReconnects(-1)
     }
 
-    if (
-      System.getenv("NATS_NKEY") != null && System.getenv("NATS_NKEY") != ""
-    ) {
+    if (System.getenv("NATS_NKEY") != null && System.getenv("NATS_NKEY") != "") {
       val handler: AuthHandler = new SampleAuthHandler(
         System.getenv("NATS_NKEY")
       )
       builder.authHandler(handler)
-    } else if (
-      System.getenv("NATS_CREDS") != null && System.getenv("NATS_CREDS") != ""
-    ) {
+    } else if (System.getenv("NATS_CREDS") != null && System.getenv("NATS_CREDS") != "") {
       builder.authHandler(Nats.credentials(System.getenv("NATS_CREDS")));
-    } else if (System.getenv("NATS_TLS_KEY_STORE") != null && System.getenv("NATS_TLS_KEY_STORE") != "" && System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
+    }
 
+    if (System.getenv("NATS_TLS_KEY_STORE") != null && System.getenv("NATS_TLS_KEY_STORE") != "" && System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
       val tlsAlgo = if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
         System.getenv("NATS_TLS_ALGO")
       } else "SunX509"
