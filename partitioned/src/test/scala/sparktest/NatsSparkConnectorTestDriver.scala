@@ -63,7 +63,7 @@ object NatsSparkConnectorTestDriver extends App {
     //     })
 
     // Create Streaming DataFrame by reading data from socket.
-    val host = "0.0.0.0"
+    val host = "localhost"
     val port = "4222"
     val streamPrefix  = "benchstream"
     

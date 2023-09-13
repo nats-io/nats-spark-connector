@@ -16,7 +16,7 @@ object NatsTestDriver extends App {
     Map(
       "nats.stream.name" -> "TestStream", 
       "nats.stream.subjects" -> "test1, test2",
-      "nats.host" -> "0.0.0.0",
+      "nats.host" -> "localhost",
       "nats.port" -> "4222",
       "nats.msg.ack.wait.secs" -> "10",
       "nats.durable.name" -> "Durable"
