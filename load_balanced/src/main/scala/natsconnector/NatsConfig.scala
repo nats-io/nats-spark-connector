@@ -68,7 +68,7 @@ class NatsConfig(isSource: Boolean) {
   // If zero messages then subsciber will wait messageReceiveWaitTime before giving up.
 
   // ============== JetStream stream Config Values
-  // TODO: add replication configuration
+  var replicationCount = 1 // configurable
   var streamName: Option[String] = None // configurable
   var storageType: StorageType = StorageType.File // configurable
   var streamSubjects: Option[String] = None // configurable
@@ -194,6 +194,14 @@ class NatsConfig(isSource: Boolean) {
       case e: NoSuchElementException =>
     }
 
+    try {
+      val numReplicas = parameters("nats.storage.replicas").toInt
+      // num of replicas is set to '1' by default
+        this.replicationCount = numReplicas
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
     this.nc = {
       this.server = Some(s"nats://${this.host}:${this.port}")
       this.options = Some(createConnectionOptions(this.server.get, this.allowReconnect))
@@ -256,6 +264,7 @@ class NatsConfig(isSource: Boolean) {
       .builder()
       .name(this.streamName.get)
       .storageType(this.storageType)
+      .replicas(this.replicationCount)
       // .subjects(subjects.asJava)
       .subjects(this.streamSubjects.get.replace(" ", "").split(",").toList.asJava)
       .retentionPolicy(this.retentionPolicy)
@@ -265,8 +274,19 @@ class NatsConfig(isSource: Boolean) {
       val logger:Logger = NatsLogger.logger
       logger.info(sc.toJson())
     }
+
     // Add or use an existing stream.
-    val si: StreamInfo = jsm.addStream(sc)
+    val si: StreamInfo = try {
+      jsm.getStreamInfo(this.streamName.get)
+      // if the stream is already defined, don't try to define it
+    } catch {
+      case e: JetStreamApiException =>
+      if (e.getApiErrorCode == 10059) {
+          // stream not found, define it
+          jsm.addStream(sc)
+        } else throw e
+    }
+
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
       logger.info(si.getConfiguration())

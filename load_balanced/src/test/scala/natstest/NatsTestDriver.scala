@@ -19,7 +19,8 @@ object NatsTestDriver extends App {
       "nats.host" -> "localhost",
       "nats.port" -> "4222",
       "nats.msg.ack.wait.secs" -> "10",
-      "nats.durable.name" -> "Durable"
+      "nats.durable.name" -> "Durable",
+      "nats.storage.replicas" -> "1"
     )
   NatsConfigSource.config.setConnection(parameters)
   NatsConfigSink.config.streamName = Some("TestStream")

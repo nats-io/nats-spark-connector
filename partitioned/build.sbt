@@ -1,6 +1,6 @@
 
 name := "nats-spark-connector"
-version := "1.1.1"
+version := "1.1.2"
 scalaVersion := "2.12.14"
 
 val sparkVersion = "3.3.0"
