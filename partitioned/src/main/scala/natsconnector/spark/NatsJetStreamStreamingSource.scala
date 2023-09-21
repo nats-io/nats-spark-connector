@@ -59,7 +59,7 @@ class NatsJetStreamStreamingSource(
     val offsetMap: MutableMap[Int, Long] = MutableMap()
 
     for(partition <- 0 until NatsConfigSource.config.numPartitions) {
-      val jsm = NatsConfigSource.config.nc.jetStreamManagement()
+      val jsm = NatsConfigSource.config.jsm
       val jsi = jsm.getStreamInfo(NatsConfigSource.config.streamPrefix + "-" + partition.toString())
       val last = jsi.getStreamState.getLastSequence()
       offsetMap += (partition -> last)
@@ -76,7 +76,7 @@ class NatsJetStreamStreamingSource(
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    val js = NatsConfigSource.config.nc.jetStream()
+    val js = NatsConfigSource.config.js
     // create ordered ephemeral here and get the data
 
     this.logger.debug("=====================In NatsStreamingSource.getBatch")
@@ -102,7 +102,7 @@ class NatsJetStreamStreamingSource(
       if (start.isEmpty || (NatsConfigSource.config.resetOnRestart && this.firstTime)) { 
         this.firstTime = false 
         for(partition <- 0 until NatsConfigSource.config.numPartitions) {
-          val jsm = NatsConfigSource.config.nc.jetStreamManagement()
+          val jsm = NatsConfigSource.config.jsm
           val jsi = jsm.getStreamInfo(NatsConfigSource.config.streamPrefix + "-" + partition.toString())
           // val first = jsi.getStreamState.getFirstSequence() - 1
           val first = 1L

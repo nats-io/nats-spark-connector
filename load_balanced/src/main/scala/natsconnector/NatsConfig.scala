@@ -1,28 +1,18 @@
 package natsconnector
 
 import java.time.Duration
-import io.nats.client.JetStream
-import io.nats.client.JetStreamManagement
+import io.nats.client.{AuthHandler, Connection, ConnectionListener, Consumer, ErrorListener, JetStream, JetStreamApiException, JetStreamManagement, JetStreamOptions, Nats, Options, PullSubscribeOptions, PushSubscribeOptions}
 import io.nats.client.api.StreamInfo
 
 import java.io.{BufferedInputStream, FileInputStream, IOException}
-import io.nats.client.JetStreamApiException
-import io.nats.client.Nats
-import io.nats.client.Options
-import io.nats.client.ErrorListener
-import io.nats.client.Connection
-import io.nats.client.Consumer
-import io.nats.client.ConnectionListener
-import io.nats.client.ConnectionListener
 import io.nats.client.ConnectionListener.Events
-import io.nats.client.AuthHandler
 import io.nats.client.api.StreamConfiguration
 import io.nats.client.api.StorageType
-import io.nats.client.{PullSubscribeOptions, PushSubscribeOptions}
 import io.nats.client.api.ConsumerConfiguration
 import io.nats.client.api.AckPolicy
 import io.nats.client.api.RetentionPolicy
 import io.nats.client.api.DeliverPolicy
+
 import scala.collection.JavaConverters._
 import org.apache.log4j.PropertyConfigurator
 import org.apache.log4j.Logger
@@ -82,6 +72,9 @@ class NatsConfig(isSource: Boolean) {
   var msgAckWaitTime =
     Duration.ofSeconds(60) // time server expects ack back after sending msg,
   // should be longer than max time expected to process msg. - configurable
+  var jsAPIPrefix: Option[String] = None // configurable
+  var userName: Option[String] = None // configurable
+  var userPassword: Option[String] = None // configurable
 
   // ============== Application Config Values
   val dateTimeFormat = "MM/dd/yyyy - HH:mm:ss Z"
@@ -146,6 +139,18 @@ class NatsConfig(isSource: Boolean) {
     }
 
     try {
+      this.userName = Some(parameters("nats.connection.user.name"))
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      this.userPassword = Some(parameters("nats.connection.user.password"))
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
       this.pingInterval =
         Duration.ofSeconds(parameters("nats.ping.interval.secs").toLong)
     } catch {
@@ -202,22 +207,27 @@ class NatsConfig(isSource: Boolean) {
       case e: NoSuchElementException =>
     }
 
-    this.nc = {
-      this.server = Some(s"nats://${this.host}:${this.port}")
-      this.options = Some(createConnectionOptions(this.server.get, this.allowReconnect))
-      Some(Nats.connect(options.get))
-    }
-    if (isSource) {
-      this.js = Some(getJetStreamContext())
+    try {
+      val param = parameters("nats.js.api-prefix")
+      if (param != null && param != "") {
+        this.jsAPIPrefix = Some(param)
+      }
+    } catch {
+      case e: NoSuchElementException =>
     }
 
-    if(this.isLocal) {
-      val logger:Logger = NatsLogger.logger
+    this.server = Some(s"nats://${this.host}:${this.port}")
+    this.options = Some(createConnectionOptions(this.server.get, this.allowReconnect))
+
+    if (this.isLocal) {
+      val logger: Logger = NatsLogger.logger
       logger.debug(
         "Current internal config state:\n"
           + s"host = ${this.host}\n"
           + s"port = ${this.port}\n"
           + s"server = ${this.server}\n"
+          + s"userName = ${this.userName}\n"
+          + s"userPassword = ${this.userPassword.getOrElse("")}\n"
           + s"allowReconnect = ${this.allowReconnect}\n"
           + s"connectionTimeout = ${this.connectionTimeout}\n"
           + s"pingInterval = ${this.pingInterval}\n"
@@ -225,6 +235,8 @@ class NatsConfig(isSource: Boolean) {
           + s"messageReceiveWaitTime = ${this.messageReceiveWaitTime}\n"
           + s"flushWaitTime = ${this.flushWaitTime}\n"
           + s"msgFetchBatchSize = ${this.msgFetchBatchSize}\n"
+          + s"jsAPIPrefix = ${this.jsAPIPrefix}\n"
+          + s"replicationCount = ${this.replicationCount}\n"
           + s"streamName = ${this.streamName}\n"
           + s"storageType = ${this.storageType}\n"
           + s"streamSubjects = ${this.streamSubjects}\n"
@@ -239,6 +251,12 @@ class NatsConfig(isSource: Boolean) {
           + s"[Nats connection] nc = ${this.nc}\n"
           + s"[JetStream context] js= ${this.js}\n"
       )
+    }
+
+    this.nc = Some(Nats.connect(options.get))
+
+    if (isSource) {
+      this.js = Some(getJetStreamContext())
     }
   }
 
@@ -256,7 +274,13 @@ class NatsConfig(isSource: Boolean) {
       val logger:Logger = NatsLogger.logger
       logger.info("=====================In NatsConfig.getJetStreamContext")
     }
-    val jsm: JetStreamManagement = this.nc.get.jetStreamManagement()
+
+    val jsm: JetStreamManagement = if (this.jsAPIPrefix.isEmpty) {
+      this.nc.get.jetStreamManagement()
+    } else {
+      val options = JetStreamOptions.builder().prefix(this.jsAPIPrefix.get).build()
+      this.nc.get.jetStreamManagement(options)
+    }
 
     val subjects: List[String] = null // List("bs", this.streamSubject)
 
@@ -312,7 +336,13 @@ class NatsConfig(isSource: Boolean) {
         jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
       }
     }
-    this.nc.get.jetStream()
+
+    if (this.jsAPIPrefix.isEmpty) {
+      this.nc.get.jetStream()
+    } else {
+      val options = JetStreamOptions.builder().prefix(this.jsAPIPrefix.get).build()
+      this.nc.get.jetStream(options)
+    }
   }
 
   private def getStreamInfoOrNullIfNonExistent(
@@ -437,7 +467,11 @@ class NatsConfig(isSource: Boolean) {
       builder.sslContext(ctx)
     }
 
-    return builder.build()
+    if (this.userName.isDefined) {
+      builder.userInfo(this.userName.get, this.userPassword.getOrElse(""))
+    }
+
+    builder.build()
   }
 }
 

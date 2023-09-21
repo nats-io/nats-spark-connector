@@ -1,49 +1,22 @@
 package natsconnector
 
-import scala.collection.JavaConverters._
+import java.io.BufferedInputStream
 import java.time.Duration
-import java.nio.charset.StandardCharsets
-import java.io.{BufferedInputStream, IOException}
-import org.apache.spark.sql.SparkSession
 
 //import org.slf4j.Logger
 //import org.slf4j.LoggerFactory
-import org.apache.log4j.Logger
-import org.apache.log4j.Level
-
-import io.nats.client.JetStream
-import io.nats.client.JetStreamManagement
-import io.nats.client.api.StreamInfo
-import io.nats.client.JetStreamApiException
-import io.nats.client.Nats
-import io.nats.client.Options
-import io.nats.client.ErrorListener
-import io.nats.client.Connection
-import io.nats.client.Consumer
-import io.nats.client.ConnectionListener
-import io.nats.client.ConnectionListener
 import io.nats.client.ConnectionListener.Events
-import io.nats.client.AuthHandler
-import io.nats.client.api.StreamConfiguration
-import io.nats.client.api.StorageType
-import io.nats.client.{PushSubscribeOptions, PullSubscribeOptions}
-import io.nats.client.api.ConsumerConfiguration
-import io.nats.client.api.AckPolicy
-import io.nats.client.api.RetentionPolicy
-import io.nats.client.api.DeliverPolicy
-import io.nats.client.KeyValueManagement
-import io.nats.client.api.KeyValueConfiguration
-import io.nats.client.api.KeyValueStatus
-import io.nats.client.KeyValue
-import io.nats.client.impl.Headers
-import io.nats.client.impl.NatsMessage
-import java.util.Properties
-import org.apache.log4j.PropertyConfigurator
-import java.io.FileInputStream
+import io.nats.client._
+import io.nats.client.api.{KeyValueConfiguration, KeyValueStatus}
 
+import java.io.FileInputStream
 import java.nio.file.{Files, Paths}
 import java.security.{KeyStore, SecureRandom}
-import javax.net.ssl.{KeyManagerFactory, SSLContext, TrustManagerFactory}
+import java.util.Properties
+import javax.net.ssl.{KeyManagerFactory, TrustManagerFactory}
+
+import org.apache.log4j.PropertyConfigurator
+import org.apache.log4j.Logger
 
 
 object NatsConfigSource {
@@ -71,6 +44,9 @@ class NatsConfig(isSource:Boolean) {
   var pingInterval = Duration.ofSeconds(10) 
   var reconnectWait = Duration.ofSeconds(20)
   var resetOnRestart = false
+  var jsAPIPrefix: Option[String] = None // configurable
+  var userName: Option[String] = None // configurable
+  var userPassword: Option[String] = None // configurable
 
   // ============== JetStream stream Config Values
   var streamPrefix = "None set"
@@ -84,8 +60,11 @@ class NatsConfig(isSource:Boolean) {
 
   var numPartitions = 1
 
+  var jsm: JetStreamManagement = null
+  var js: JetStream = null
+
   // Clear the KV stored partitions before resetting affinity 
-  var kv:KeyValue = null
+  var kvm:KeyValue = null
  // =========================================================================================================
   def setConnection(parameters: Map[String, String]): Unit = {
     // Obligatory parameters
@@ -107,52 +86,99 @@ class NatsConfig(isSource:Boolean) {
     try {
       this.numPartitions = parameters("nats.num.partitions").toInt
     } catch {
-      case e: NoSuchElementException => 
+      case e: NoSuchElementException =>
     }
 
     try {
       this.allowReconnect = parameters("nats.allow.reconnect").toBoolean
     } catch {
-      case e: NoSuchElementException => 
+      case e: NoSuchElementException =>
     }
 
     try {
       this.connectionTimeout = Duration.ofSeconds(parameters("nats.connection.timeout").toLong)
     } catch {
-      case e: NoSuchElementException => 
+      case e: NoSuchElementException =>
     }
 
     try {
       this.pingInterval = Duration.ofSeconds(parameters("nats.ping.interval").toLong)
     } catch {
-      case e: NoSuchElementException => 
+      case e: NoSuchElementException =>
     }
 
     try {
       this.reconnectWait = Duration.ofSeconds(parameters("nats.reconnect.wait").toLong)
     } catch {
-      case e: NoSuchElementException => 
+      case e: NoSuchElementException =>
     }
 
     try {
       this.resetOnRestart = parameters("nats.reset.on.restart").toBoolean
     } catch {
-      case e: NoSuchElementException => 
+      case e: NoSuchElementException =>
     }
 
-    this.nc = {
-      this.server = s"nats://${this.host}:${this.port}"
-      this.options = createConnectionOptions(this.server, this.allowReconnect)
-      Nats.connect(options)
+    try {
+      this.userName = Some(parameters("nats.connection.user.name"))
+    } catch {
+      case e: NoSuchElementException =>
     }
 
-    this.kv = {
-      val kvm:KeyValueManagement  = this.nc.keyValueManagement();
+    try {
+      this.userPassword = Some(parameters("nats.connection.user.password"))
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+
+    try {
+      val param = parameters("nats.js.api-prefix")
+      if (param != null && param != "") {
+        this.jsAPIPrefix = Some(param)
+      }
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    this.server = s"nats://${this.host}:${this.port}"
+    this.options = createConnectionOptions(this.server, this.allowReconnect)
+
+    this.nc = Nats.connect(options)
+
+    this.jsm = if (this.jsAPIPrefix.isEmpty) {
+      this.nc.jetStreamManagement()
+    } else {
+      val options = JetStreamOptions.builder().prefix(this.jsAPIPrefix.get).build()
+      this.nc.jetStreamManagement(options)
+    }
+
+    this.js = if (this.jsAPIPrefix.isEmpty) {
+      this.nc.jetStream()
+    } else {
+      val options = JetStreamOptions.builder().prefix(this.jsAPIPrefix.get).build()
+      this.nc.jetStream(options)
+    }
+
+    this.kvm = {
+      val kvm:KeyValueManagement  = if (this.jsAPIPrefix.isEmpty) {
+        this.nc.keyValueManagement()
+      } else {
+        val options = KeyValueOptions.builder().jetStreamOptions(JetStreamOptions.builder().prefix(this.jsAPIPrefix.get).build()).build()
+        this.nc.keyValueManagement(options)
+      }
+
       val kvc:KeyValueConfiguration = KeyValueConfiguration.builder()
                                  .name("partitions")
                                  .build();
       val keyValueStatus:KeyValueStatus = kvm.create(kvc);
-      val kval = this.nc.keyValue("partitions"); 
+      val kval = if (this.jsAPIPrefix.isEmpty) {
+        this.nc.keyValue("partitions")
+      } else {
+        val options = KeyValueOptions.builder().jetStreamOptions(JetStreamOptions.builder().prefix(this.jsAPIPrefix.get).build()).build()
+        this.nc.keyValue("partitions", options)
+      }
+
       var worker = 0
       while(worker < this.numPartitions) {
         kval.delete(worker.toString())
@@ -276,7 +302,11 @@ class NatsConfig(isSource:Boolean) {
       builder.sslContext(ctx)
     }
 
-    return builder.build()
+    if (this.userName.isDefined) {
+      builder.userInfo(this.userName.get, this.userPassword.getOrElse(""))
+    }
+
+    builder.build()
   }
 
 }

@@ -89,7 +89,7 @@ final object NatsJetStreamBatchProcessor {
               override def run(): Unit = {
                 val thread = Thread.currentThread()
                 // create thread affinity and register thread for management
-                val partition = registerThread(thread, NatsConfigSource.config.kv)
+                val partition = registerThread(thread, NatsConfigSource.config.kvm)
                 // TODO: register with offset
                 while(true) {
                     doLatch()
@@ -97,7 +97,7 @@ final object NatsJetStreamBatchProcessor {
                     val startJSOffset = offsets._1
                     // if the stream was cleared then the spark-stored end-offset may be
                     // greater than the actual nats end-offset.
-                    val jsm = NatsConfigSource.config.nc.jetStreamManagement()
+                    val jsm = NatsConfigSource.config.jsm
                     val jsi = jsm.getStreamInfo(NatsConfigSource.config.streamPrefix + "-" + partition.toString())
                     val last = jsi.getStreamState().getLastSequence()
                     val endJSOffset = if(offsets._2 > last) last else offsets._2
@@ -122,7 +122,7 @@ println(s"adjusted==> partition $partition: start:$startJSOffset end:$endJSOffse
                         breakable {
                             try {
                                 this.logger.debug(s" Thread ${thread.getName()} trying for connection.")
-                                val js = NatsConfigSource.config.nc.jetStream()
+                                val js = NatsConfigSource.config.js
                                 orderedSub = js.subscribe(">", opso)
                             } catch {
                                 case e: IOException => {
