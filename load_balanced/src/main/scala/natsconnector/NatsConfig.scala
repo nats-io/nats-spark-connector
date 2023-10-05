@@ -58,6 +58,7 @@ class NatsConfig(isSource: Boolean) {
   // If zero messages then subsciber will wait messageReceiveWaitTime before giving up.
 
   // ============== JetStream stream Config Values
+  var defineStream = false // configurable
   var replicationCount = 1 // configurable
   var streamName: Option[String] = None // configurable
   var storageType: StorageType = StorageType.File // configurable
@@ -202,7 +203,7 @@ class NatsConfig(isSource: Boolean) {
     try {
       val numReplicas = parameters("nats.storage.replicas").toInt
       // num of replicas is set to '1' by default
-        this.replicationCount = numReplicas
+      this.replicationCount = numReplicas
     } catch {
       case e: NoSuchElementException =>
     }
@@ -212,6 +213,13 @@ class NatsConfig(isSource: Boolean) {
       if (param != null && param != "") {
         this.jsAPIPrefix = Some(param)
       }
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      val param = parameters("nats.js.define-stream").toBoolean
+      this.defineStream = param
     } catch {
       case e: NoSuchElementException =>
     }
@@ -236,6 +244,7 @@ class NatsConfig(isSource: Boolean) {
           + s"flushWaitTime = ${this.flushWaitTime}\n"
           + s"msgFetchBatchSize = ${this.msgFetchBatchSize}\n"
           + s"jsAPIPrefix = ${this.jsAPIPrefix}\n"
+          + s"defineStream = ${this.defineStream}\n"
           + s"replicationCount = ${this.replicationCount}\n"
           + s"streamName = ${this.streamName}\n"
           + s"storageType = ${this.storageType}\n"
@@ -270,8 +279,8 @@ class NatsConfig(isSource: Boolean) {
   }
 
   private def getJetStreamContext(): JetStream = {
-    if(this.isLocal) {
-      val logger:Logger = NatsLogger.logger
+    if (this.isLocal) {
+      val logger: Logger = NatsLogger.logger
       logger.info("=====================In NatsConfig.getJetStreamContext")
     }
 
@@ -282,43 +291,47 @@ class NatsConfig(isSource: Boolean) {
       this.nc.get.jetStreamManagement(options)
     }
 
-    val subjects: List[String] = null // List("bs", this.streamSubject)
+    // define the stream if so configured
+    if (this.defineStream) {
+      val sc: StreamConfiguration = StreamConfiguration
+        .builder()
+        .name(this.streamName.get)
+        .storageType(this.storageType)
+        .replicas(this.replicationCount)
+        // .subjects(subjects.asJava)
+        .subjects(this.streamSubjects.get.replace(" ", "").split(",").toList.asJava)
+        .retentionPolicy(this.retentionPolicy)
+        .build()
 
-    val sc: StreamConfiguration = StreamConfiguration
-      .builder()
-      .name(this.streamName.get)
-      .storageType(this.storageType)
-      .replicas(this.replicationCount)
-      // .subjects(subjects.asJava)
-      .subjects(this.streamSubjects.get.replace(" ", "").split(",").toList.asJava)
-      .retentionPolicy(this.retentionPolicy)
-      .build()
+      if (this.isLocal) {
+        val logger: Logger = NatsLogger.logger
+        logger.info(sc.toJson())
+      }
 
-    if(this.isLocal) {
-      val logger:Logger = NatsLogger.logger
-      logger.info(sc.toJson())
+      // Add or use an existing stream.
+      val si: StreamInfo = try {
+        jsm.getStreamInfo(this.streamName.get)
+        // if the stream is already defined, don't try to define it
+      } catch {
+        case e: JetStreamApiException =>
+          if (e.getApiErrorCode == 10059) {
+            // stream not found, define it
+            jsm.addStream(sc)
+          } else throw e
+      }
+
+      if (this.isLocal) {
+        val logger: Logger = NatsLogger.logger
+        logger.info(si.getConfiguration())
+        logger.info(
+          s"Created stream ${jsm.getStreamInfo(this.streamName.get)} with consumers ${
+            jsm
+              .getConsumers(this.streamName.get)
+          }."
+        )
+      }
     }
 
-    // Add or use an existing stream.
-    val si: StreamInfo = try {
-      jsm.getStreamInfo(this.streamName.get)
-      // if the stream is already defined, don't try to define it
-    } catch {
-      case e: JetStreamApiException =>
-      if (e.getApiErrorCode == 10059) {
-          // stream not found, define it
-          jsm.addStream(sc)
-        } else throw e
-    }
-
-    if(this.isLocal) {
-      val logger:Logger = NatsLogger.logger
-      logger.info(si.getConfiguration())
-      logger.info(
-        s"Created stream ${jsm.getStreamInfo(this.streamName.get)} with consumers ${jsm
-          .getConsumers(this.streamName.get)}."
-      )
-    }
     val subjectArray = this.streamSubjects.get.replace(" ", "").split(",")
     subjectArray.zipWithIndex.foreach {
       case (subject, idx) => {
@@ -415,56 +428,71 @@ class NatsConfig(isSource: Boolean) {
       builder.authHandler(Nats.credentials(System.getenv("NATS_CREDS")));
     }
 
-    if (System.getenv("NATS_TLS_KEY_STORE") != null && System.getenv("NATS_TLS_KEY_STORE") != "" && System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
-      val tlsAlgo = if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
-        System.getenv("NATS_TLS_ALGO")
-      } else "SunX509"
+    val tlsAlgo = if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
+      System.getenv("NATS_TLS_ALGO")
+    } else "SunX509"
 
-      val instanceType = if (System.getenv("NATS_TLS_STORE_TYPE") != null && System.getenv("NATS_TLS_STORE_TYPE") != "") {
-        System.getenv("NATS_TLS_STORE_TYPE")
-      } else "JKS"
+    val instanceType = if (System.getenv("NATS_TLS_STORE_TYPE") != null && System.getenv("NATS_TLS_STORE_TYPE") != "") {
+      System.getenv("NATS_TLS_STORE_TYPE")
+    } else "JKS"
 
-      val keyStorePassword = if (System.getenv("NATS_TLS_KEY_STORE_PASSWORD") != null) {
-        System.getenv("NATS_TLS_KEY_STORE_PASSWORD").toCharArray
-      } else "".toCharArray
+    if (System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
+      //      val trustStorePassword = if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
+      //        System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray
+      //      } else "".toCharArray
 
-      val trustStorePassword = if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
-        System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray
-      } else "".toCharArray
+      //      val ctx = javax.net.ssl.SSLContext.getInstance(Options.DEFAULT_SSL_PROTOCOL)
+      //
+      //      val trustStore = KeyStore.getInstance(instanceType)
+      //      val inputTrustF = new BufferedInputStream(Files.newInputStream(Paths.get(System.getenv("NATS_TLS_TRUST_STORE"))))
+      //      try {
+      //        trustStore.load(inputTrustF, trustStorePassword)
+      //      } catch {
+      //        case e: Exception => System.out.println("Exception " + e.getMessage)
+      //      } finally {
+      //        if (inputTrustF != null) inputTrustF.close()
+      //      }
+      //
+      //      val tmsFactory = TrustManagerFactory.getInstance(tlsAlgo)
+      //      tmsFactory.init(trustStore)
+      //      val tms = tmsFactory.getTrustManagers
 
-
-      val ctx = javax.net.ssl.SSLContext.getInstance(Options.DEFAULT_SSL_PROTOCOL)
-
-      val keyStore = KeyStore.getInstance(instanceType)
-
-      val inputKeyF = new BufferedInputStream(Files.newInputStream(Paths.get(System.getenv("NATS_TLS_KEY_STORE"))))
-      try {
-        keyStore.load(inputKeyF, keyStorePassword)
-      } catch {
-        case e: Exception => System.out.println("Exception " + e.getMessage)
-      } finally {
-        if (inputKeyF != null) {inputKeyF.close()}
+      builder.truststorePath(System.getenv("NATS_TLS_TRUST_STORE"));
+      if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
+        builder.truststorePassword(System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray)
       }
 
-      val kmsFactory = KeyManagerFactory.getInstance(tlsAlgo)
-      kmsFactory.init(keyStore, keyStorePassword)
-      val kms = kmsFactory.getKeyManagers
+      if (System.getenv("NATS_TLS_KEY_STORE") != null) {
+        if (System.getenv("NATS_TLS_KEY_STORE_PASSWORD") != null) {
+          builder.keystorePassword(System.getenv("NATS_TLS_KEY_STORE_PASSWORD").toCharArray)
+        }
 
-      val trustStore = KeyStore.getInstance(instanceType)
-      val inputTrustF = new BufferedInputStream(Files.newInputStream(Paths.get(System.getenv("NATS_TLS_TRUST_STORE"))))
-      try {
-        trustStore.load(inputTrustF, trustStorePassword)
-      } catch {
-        case e: Exception => System.out.println("Exception " + e.getMessage)
-      } finally {if (inputTrustF != null) inputTrustF.close()}
 
-      val tmsFactory = TrustManagerFactory.getInstance(tlsAlgo)
-      tmsFactory.init(trustStore)
-      val tms = tmsFactory.getTrustManagers
+        /* val keyStore = KeyStore.getInstance(instanceType)
 
-      ctx.init(kms, tms, new SecureRandom())
+         val inputKeyF = new BufferedInputStream(Files.newInputStream(Paths.get(System.getenv("NATS_TLS_KEY_STORE"))))
+         try {
+           keyStore.load(inputKeyF, keyStorePassword)
+         } catch {
+           case e: Exception => System.out.println("Exception " + e.getMessage)
+         } finally {
+           if (inputKeyF != null) {
+             inputKeyF.close()
+           }
+         }
 
-      builder.sslContext(ctx)
+         val kmsFactory = KeyManagerFactory.getInstance(tlsAlgo)
+         kmsFactory.init(keyStore, keyStorePassword)
+         val kms = kmsFactory.getKeyManagers
+
+         ctx.init(kms, tms, new SecureRandom())
+         builder.sslContext(ctx)*/
+        builder.keystorePath(System.getenv("NATS_TLS_KEY_STORE"));
+
+      } else {
+        //        ctx.init(null, tms, new SecureRandom())
+        //        builder.sslContext(ctx)
+      }
     }
 
     if (this.userName.isDefined) {
@@ -478,7 +506,7 @@ class NatsConfig(isSource: Boolean) {
 object NatsLogger {
   val logger = {
     val logger: Logger = Logger.getLogger("NATSCON =>")
-    val log4JPropertyFile = "src/test/resources/log4j.properties"
+    val log4JPropertyFile = if (System.getenv("LOG_PROP_PATH") != null) System.getenv("LOG_PROP_PATH") else "src/test/resources/log4j.properties"
     val p = new Properties()
     p.load(new FileInputStream(log4JPropertyFile))
     PropertyConfigurator.configure(p)
