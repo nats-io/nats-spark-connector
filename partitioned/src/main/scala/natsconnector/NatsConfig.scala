@@ -246,60 +246,23 @@ class NatsConfig(isSource:Boolean) {
       builder.authHandler(Nats.credentials(System.getenv("NATS_CREDS")));
     }
 
-    if (System.getenv("NATS_TLS_KEY_STORE") != null && System.getenv("NATS_TLS_KEY_STORE") != "" && System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
+    if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
+      builder.tlsAlgorithm(System.getenv("NATS_TLS_ALGO"))
+    }
 
-      val tlsAlgo = if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
-        System.getenv("NATS_TLS_ALGO")
-      } else "SunX509"
+    if (System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
 
-      val instanceType = if (System.getenv("NATS_TLS_STORE_TYPE") != null && System.getenv("NATS_TLS_STORE_TYPE") != "") {
-        System.getenv("NATS_TLS_STORE_TYPE")
-      } else "JKS"
-
-      val keyStorePassword = if (System.getenv("NATS_TLS_KEY_STORE_PASSWORD") != null) {
-        System.getenv("NATS_TLS_KEY_STORE_PASSWORD").toCharArray
-      } else "".toCharArray
-
-      val trustStorePassword = if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
-        System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray
-      } else "".toCharArray
-
-      val ctx = javax.net.ssl.SSLContext.getInstance(Options.DEFAULT_SSL_PROTOCOL)
-
-      val keyStore = KeyStore.getInstance(instanceType)
-
-      val inputKeyF = new BufferedInputStream(Files.newInputStream(Paths.get(System.getenv("NATS_TLS_KEY_STORE"))))
-      try {
-        keyStore.load(inputKeyF, keyStorePassword)
-      } catch {
-        case e: Exception => System.out.println("Exception " + e.getMessage)
-      } finally {
-        if (inputKeyF != null) {
-          inputKeyF.close()
-        }
+      builder.truststorePath(System.getenv("NATS_TLS_TRUST_STORE"));
+      if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
+        builder.truststorePassword(System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray)
       }
+    }
 
-      val kmsFactory = KeyManagerFactory.getInstance(tlsAlgo)
-      kmsFactory.init(keyStore, keyStorePassword)
-      val kms = kmsFactory.getKeyManagers
-
-      val trustStore = KeyStore.getInstance(instanceType)
-      val inputTrustF = new BufferedInputStream(Files.newInputStream(Paths.get(System.getenv("NATS_TLS_TRUST_STORE"))))
-      try {
-        trustStore.load(inputTrustF, trustStorePassword)
-      } catch {
-        case e: Exception => System.out.println("Exception " + e.getMessage)
-      } finally {
-        if (inputTrustF != null) inputTrustF.close()
+    if (System.getenv("NATS_TLS_KEY_STORE") != null) {
+      if (System.getenv("NATS_TLS_KEY_STORE_PASSWORD") != null) {
+        builder.keystorePassword(System.getenv("NATS_TLS_KEY_STORE_PASSWORD").toCharArray)
       }
-
-      val tmsFactory = TrustManagerFactory.getInstance(tlsAlgo)
-      tmsFactory.init(trustStore)
-      val tms = tmsFactory.getTrustManagers
-
-      ctx.init(kms, tms, new SecureRandom())
-
-      builder.sslContext(ctx)
+      builder.keystorePath(System.getenv("NATS_TLS_KEY_STORE"));
     }
 
     if (this.userName.isDefined) {
@@ -311,15 +274,18 @@ class NatsConfig(isSource:Boolean) {
 
 }
 
-case class NatsMsg(val subject:String, val dateTime:String, val content:String) 
+case class NatsMsg(val subject:String, val dateTime:String, val content:String)
 
 object NatsLogger {
   val logger = {
-    val logger:Logger = Logger.getLogger("NATSCON =>")
-    val log4JPropertyFile = "src/test/resources/log4j.properties"
+    val logger: Logger = Logger.getLogger("NATSCON =>")
     val p = new Properties()
-    p.load(new FileInputStream(log4JPropertyFile))
-    PropertyConfigurator.configure(p)  
+
+    if (System.getenv("LOG_PROP_PATH") != null) {
+      p.load(new FileInputStream(System.getenv("LOG_PROP_PATH")))
+    }
+
+    PropertyConfigurator.configure(p)
     logger
   }
 }

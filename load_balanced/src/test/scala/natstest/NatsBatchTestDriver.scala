@@ -11,7 +11,7 @@ object NatsBatchTestDriver extends App {
     Map(
       "nats.stream.name" -> "TestBatchStream", 
       "nats.stream.subjects" -> "BatchTest1, BatchTest2",
-      "nats.host" -> "0.0.0.0",
+      "nats.host" -> "localhost",
       "nats.port" -> "4222",
       "nats.msg.ack.wait.secs" -> "10",
       "nats.durable.name" -> "Durable"

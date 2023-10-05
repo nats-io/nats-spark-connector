@@ -1,6 +1,7 @@
+import sbt.Def.settings
 
-name := "nats-spark-connector"
-version := "1.1.3"
+name := "nats-spark-connector-balanced"
+version := "1.1.4"
 scalaVersion := "2.12.14"
 
 val sparkVersion = "3.3.0"
@@ -9,15 +10,15 @@ val vegasVersion = "0.3.11"
 val postgresVersion = "42.2.2"
 val slf4jVersion = "2.0.3"
 
-
 //libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
 libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.12.14"
-libraryDependencies += "io.nats" % "jnats" % "2.13.2"
+libraryDependencies += "io.nats" % "jnats" % "2.17.1-SNAPSHOT"
 
 resolvers ++= Seq(
   "MavenRepository2" at "https://mvnrepository.com",
   "bintray-spark-packages" at "https://dl.bintray.com/spark-packages/maven",
   "Typesafe Simple Repository" at "https://repo.typesafe.com/typesafe/simple/maven-releases",
+  "Sonatype Repository" at "https://oss.sonatype.org/service/local/repositories/snapshots/content",
   )
 
 libraryDependencies ++= Seq(
@@ -39,7 +40,7 @@ libraryDependencies ++= Seq(
   "com.fasterxml.jackson.dataformat" % "jackson-dataformat-yaml" % "2.13.1",
 )
 
-
+assemblyMergeStrategy := (_ => MergeStrategy.first)
 
 // You can use Scaladex, an index of all known published Scala libraries. There,
 // after you find the library you want, you can just copy/paste the dependency
