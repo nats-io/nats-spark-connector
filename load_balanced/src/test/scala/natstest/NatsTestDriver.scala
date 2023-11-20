@@ -22,6 +22,7 @@ object NatsTestDriver extends App {
       "nats.durable.name" -> "Durable",
       "nats.storage.replicas" -> "1",
       "nats.js.define-stream" -> "true",
+      "nats.js.define-consumer" -> "true",
     )
   NatsConfigSource.config.setConnection(parameters)
   NatsConfigSink.config.streamName = Some("TestStream")

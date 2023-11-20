@@ -14,7 +14,9 @@ object NatsBatchTestDriver extends App {
       "nats.host" -> "localhost",
       "nats.port" -> "4222",
       "nats.msg.ack.wait.secs" -> "10",
-      "nats.durable.name" -> "Durable"
+      "nats.durable.name" -> "Durable",
+      "nats.js.define-stream" -> "true",
+      "nats.js.define-consumer" -> "true",
     )
   NatsConfigSource.config.setConnection(parameters)
   NatsConfigSink.config.streamName = Some("TestBatchStream")

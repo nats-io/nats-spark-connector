@@ -58,7 +58,8 @@ class NatsConfig(isSource: Boolean) {
   // If zero messages then subsciber will wait messageReceiveWaitTime before giving up.
 
   // ============== JetStream stream Config Values
-  var defineStream = false // configurable
+  var defineStream = true // configurable
+  var defineConsumer = true // configurable
   var replicationCount = 1 // configurable
   var streamName: Option[String] = None // configurable
   var storageType: StorageType = StorageType.File // configurable
@@ -224,6 +225,13 @@ class NatsConfig(isSource: Boolean) {
       case e: NoSuchElementException =>
     }
 
+    try {
+      val param = parameters("nats.js.define-consumer").toBoolean
+      this.defineConsumer = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
     this.server = Some(s"nats://${this.host}:${this.port}")
     this.options = Some(createConnectionOptions(this.server.get, this.allowReconnect))
 
@@ -332,21 +340,23 @@ class NatsConfig(isSource: Boolean) {
       }
     }
 
-    val subjectArray = this.streamSubjects.get.replace(" ", "").split(",")
-    subjectArray.zipWithIndex.foreach {
-      case (subject, idx) => {
-        val configBuilder = ConsumerConfiguration
-          .builder()
-          .ackWait(this.msgAckWaitTime)
-          .ackPolicy(this.ackPolicy)
-          .filterSubject(subject)
-          .deliverPolicy(this.deliverPolicy)
-        if(this.durable.isDefined)
-          configBuilder.durable(s"${this.durable.get}-${idx}")
-        else {
-          // TODO: Add configBuilder.InactiveThreshold()
+    if (this.defineConsumer) {
+      val subjectArray = this.streamSubjects.get.replace(" ", "").split(",")
+      subjectArray.zipWithIndex.foreach {
+        case (subject, idx) => {
+          val configBuilder = ConsumerConfiguration
+            .builder()
+            .ackWait(this.msgAckWaitTime)
+            .ackPolicy(this.ackPolicy)
+            .filterSubject(subject)
+            .deliverPolicy(this.deliverPolicy)
+          if (this.durable.isDefined)
+            configBuilder.durable(s"${this.durable.get}-${idx}")
+          else {
+            // TODO: Add configBuilder.InactiveThreshold()
+          }
+          jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
         }
-        jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
       }
     }
 

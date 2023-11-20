@@ -1,6 +1,6 @@
 
 name := "nats-spark-connector-partitioned"
-version := "1.1.4"
+version := "1.1.5"
 scalaVersion := "2.12.14"
 
 val sparkVersion = "3.3.0"
