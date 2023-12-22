@@ -125,9 +125,9 @@ class Batcher() extends Runnable {
 
   private def pullAndLoadBatch():Unit = {
     this.semaphore = true
-    val msgArray:Array[Message] = this.natsSubscriber.pullNext().flatten
+    val msgArray:java.util.List[Message] = this.natsSubscriber.pullNext()
 
-    msgArray.foreach(msg => {
+    msgArray.forEach(msg => {
       if(msg != null) this.buffer.+=(msg)
     })
     this.semaphore = false

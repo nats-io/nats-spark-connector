@@ -12,10 +12,10 @@ val slf4jVersion = "2.0.3"
 
 //libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
 libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.12.14"
-libraryDependencies += "io.nats" % "jnats" % "2.17.1-SNAPSHOT"
+libraryDependencies += "io.nats" % "jnats" % "2.17.1"
 
 resolvers ++= Seq(
-  "MavenRepository2" at "https://mvnrepository.com",
+  //"MavenRepository2" at "https://mvnrepository.com",
   "bintray-spark-packages" at "https://dl.bintray.com/spark-packages/maven",
   "Typesafe Simple Repository" at "https://repo.typesafe.com/typesafe/simple/maven-releases",
   "Sonatype Repository" at "https://oss.sonatype.org/service/local/repositories/snapshots/content",

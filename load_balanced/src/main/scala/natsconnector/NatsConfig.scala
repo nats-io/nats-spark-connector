@@ -341,23 +341,23 @@ class NatsConfig(isSource: Boolean) {
     }
 
     if (this.defineConsumer) {
-      val subjectArray = this.streamSubjects.get.replace(" ", "").split(",")
-      subjectArray.zipWithIndex.foreach {
-        case (subject, idx) => {
+      val subjects = this.streamSubjects.get.replace(" ", "")
+      //subjectArray.zipWithIndex.foreach {
+        //case (subject, idx) => {
           val configBuilder = ConsumerConfiguration
             .builder()
             .ackWait(this.msgAckWaitTime)
             .ackPolicy(this.ackPolicy)
-            .filterSubject(subject)
+            .filterSubject(subjects)
             .deliverPolicy(this.deliverPolicy)
           if (this.durable.isDefined)
-            configBuilder.durable(s"${this.durable.get}-${idx}")
+            configBuilder.durable(s"${this.durable.get}")
           else {
             // TODO: Add configBuilder.InactiveThreshold()
           }
           jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
-        }
-      }
+        //}
+      //}
     }
 
     if (this.jsAPIPrefix.isEmpty) {
