@@ -58,8 +58,8 @@ class TestRunner(id:Int, emulateFailure:Boolean, testAckAll:Boolean) extends Run
     while(true) {
       iterationNum += 1
 
-      val msgArray:Array[Message] =  natsSource.pullNext().flatten
-      msgArray.foreach(msg => {
+      val msgList =  natsSource.pullNext()
+      msgList.foreach(msg => {
           val data = new String(msg.getData(), StandardCharsets.UTF_8)
           println(s"Id ${id} RECEIVED: subject:${msg.getSubject()}, data:${data}")
 

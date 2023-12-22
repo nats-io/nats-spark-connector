@@ -1,18 +1,17 @@
 import sbt.Def.settings
 
 name := "nats-spark-connector-balanced"
-version := "1.1.5"
+version := "1.2.0"
 scalaVersion := "2.12.14"
 
 val sparkVersion = "3.3.0"
-// val sparkVersion = "2.4.5"
 val vegasVersion = "0.3.11"
 val postgresVersion = "42.2.2"
 val slf4jVersion = "2.0.3"
 
 //libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
 libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.12.14"
-libraryDependencies += "io.nats" % "jnats" % "2.17.1-SNAPSHOT"
+libraryDependencies += "io.nats" % "jnats" % "2.17.1"
 
 resolvers ++= Seq(
   "MavenRepository2" at "https://mvnrepository.com",

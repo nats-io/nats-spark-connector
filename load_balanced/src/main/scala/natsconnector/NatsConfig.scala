@@ -342,22 +342,18 @@ class NatsConfig(isSource: Boolean) {
 
     if (this.defineConsumer) {
       val subjectArray = this.streamSubjects.get.replace(" ", "").split(",")
-      subjectArray.zipWithIndex.foreach {
-        case (subject, idx) => {
-          val configBuilder = ConsumerConfiguration
-            .builder()
-            .ackWait(this.msgAckWaitTime)
-            .ackPolicy(this.ackPolicy)
-            .filterSubject(subject)
-            .deliverPolicy(this.deliverPolicy)
-          if (this.durable.isDefined)
-            configBuilder.durable(s"${this.durable.get}-${idx}")
-          else {
-            // TODO: Add configBuilder.InactiveThreshold()
-          }
-          jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
-        }
+      val configBuilder = ConsumerConfiguration
+        .builder()
+        .ackWait(this.msgAckWaitTime)
+        .ackPolicy(this.ackPolicy)
+        .filterSubjects(subjectArray.toList.asJava)
+        .deliverPolicy(this.deliverPolicy)
+      if (this.durable.isDefined)
+        configBuilder.durable(s"${this.durable.get}")
+      else {
+        // TODO: Add configBuilder.InactiveThreshold()
       }
+      jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
     }
 
     if (this.jsAPIPrefix.isEmpty) {

@@ -6,13 +6,16 @@ import io.nats.client.JetStream
 import io.nats.client.Message
 import io.nats.client.Nats
 import io.nats.client.Options
-import io.nats.client.api.PublishAck
-import io.nats.client.{PushSubscribeOptions, PullSubscribeOptions}
+import io.nats.client.api.{ConsumerConfiguration, PublishAck}
+import io.nats.client.{PullSubscribeOptions, PushSubscribeOptions}
 import io.nats.client.JetStreamSubscription
+
 import java.time.Duration
+import java.util
 import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConversions._
 import java.util.ArrayList
+import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
 
 class NatsSubscriber() {
   val subjects:String = NatsConfigSource.config.streamSubjects.get
@@ -25,38 +28,42 @@ class NatsSubscriber() {
   val streamName = NatsConfigSource.config.streamName.get
   val fetchBatchSize = NatsConfigSource.config.msgFetchBatchSize
 
-  val jSub:Array[JetStreamSubscription] = {
+  val jSub: JetStreamSubscription = {
     val subjectArray = this.subjects.replace(" ", "").split(",")
-    subjectArray.zipWithIndex.map {
-      case (subject, idx) => {
+
+
+
       val pso = {
         val config = PullSubscribeOptions.builder()
           .stream(this.streamName)
-        if(this.durable != None) 
-          config.durable(s"${this.durable.get}-${idx}")
+        if(this.durable.isDefined) {
+          config.durable(s"${this.durable.get}")
+          config.bind(true)
+        } else {
+          val cco = ConsumerConfiguration.builder()
+            .filterSubjects(subjectArray.toList.asJava)
+            .build()
+          config.configuration(cco)
+        }
         config.build()
       }
-      js.subscribe(subject, pso)}
+    js.subscribe(null, pso)
+  }
+
+  def pullNext():List[Message] = {
+    //var msgArray:Array[Message] = null
+    // println(s"Subscription is active:${jSub.isActive()}")
+
+    try {
+      this.jSub.fetch(this.fetchBatchSize, this.messageReceiveWaitTime).asScala.toList
+    } catch {
+      case ex: InterruptedException => println(s"nextMessage() waitTime exceeded: ${ex.getMessage()}."); List.empty[Message]
+      case ex: IllegalStateException => println(s"Disregarding NATS msg: ${ex.getMessage()}"); new util.ArrayList[Message](); List.empty[Message]
     }
   }
 
-  def pullNext():Array[List[Message]] = {
-    //var msgArray:Array[Message] = null
-    // println(s"Subscription is active:${jSub.isActive()}")
-    this.jSub.map(sub => {
-      var msgs: java.util.List[Message] = new ArrayList[Message]()
-      try {
-       msgs = sub.fetch(this.fetchBatchSize, this.messageReceiveWaitTime)
-      } catch {
-        case ex: InterruptedException => println(s"nextMessage() waitTime exceeded: ${ex.getMessage()}.") // just try again
-        case ex: IllegalStateException => println(s"Disregarding NATS msg: ${ex.getMessage()}") // do nothing, i.e. disregard NATS messages, only aquire Jetstreamed msgs
-      }
-      msgs.toList
-    })
-  }
-
   def unsubscribe():Unit = {
-    jSub.foreach(sub => sub.drain(Duration.ofSeconds(1)))
+    jSub.drain(Duration.ofSeconds(1))
   }
 }
 
