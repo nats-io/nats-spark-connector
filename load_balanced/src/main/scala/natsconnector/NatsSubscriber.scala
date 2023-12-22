@@ -23,8 +23,6 @@ class NatsSubscriber() {
 
   val jSub:JetStreamSubscription = {
     val trimmedSubjects = this.subjects.replace(" ", "")
-    //subjectArray.zipWithIndex.map {
-      //case (subject, idx) => {
       val pso = {
         val config = PullSubscribeOptions.builder()
           .stream(this.streamName)
@@ -38,14 +36,9 @@ class NatsSubscriber() {
         js.subscribe(null, pso)
       else
         js.subscribe(trimmedSubjects, pso)
-      //}
-    //}
   }
 
   def pullNext():java.util.List[Message] = {
-    //var msgArray:Array[Message] = null
-    // println(s"Subscription is active:${jSub.isActive()}")
-    //this.jSub.map(sub => {
       var msgs: java.util.List[Message] = new ArrayList[Message]()
       try {
        msgs = this.jSub.fetch(this.fetchBatchSize, this.messageReceiveWaitTime)
@@ -54,7 +47,6 @@ class NatsSubscriber() {
         case ex: IllegalStateException => println(s"Disregarding NATS msg: ${ex.getMessage()}") // do nothing, i.e. disregard NATS messages, only aquire Jetstreamed msgs
       }
       msgs
-    //})
   }
 
   def unsubscribe():Unit = {

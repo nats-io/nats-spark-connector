@@ -342,8 +342,6 @@ class NatsConfig(isSource: Boolean) {
 
     if (this.defineConsumer) {
       val subjects = this.streamSubjects.get.replace(" ", "")
-      //subjectArray.zipWithIndex.foreach {
-        //case (subject, idx) => {
           val configBuilder = ConsumerConfiguration
             .builder()
             .ackWait(this.msgAckWaitTime)
@@ -356,8 +354,6 @@ class NatsConfig(isSource: Boolean) {
             // TODO: Add configBuilder.InactiveThreshold()
           }
           jsm.addOrUpdateConsumer(this.streamName.get, configBuilder.build())
-        //}
-      //}
     }
 
     if (this.jsAPIPrefix.isEmpty) {
