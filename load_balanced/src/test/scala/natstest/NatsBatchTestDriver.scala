@@ -25,8 +25,8 @@ object NatsBatchTestDriver extends App {
 
   val batchMgr = new NatsSubBatchMgr()
 
-  val batchId1 = batchMgr.startNewBatch()
-  val batchId2 = batchMgr.startNewBatch()
+  val batchId1 = batchMgr.startNewBatch(None)
+  val batchId2 = batchMgr.startNewBatch(None)
 
   val natsSink = new NatsPublisher()
   val subjects = NatsConfigSink.config.streamSubjects.get.replace(" ", "").split(",")
@@ -62,7 +62,7 @@ object NatsBatchTestDriver extends App {
   println(s"Commit success:${result2}")
 
   // Confirm all messages have been committed
-  val batchId3 = batchMgr.startNewBatch()
+  val batchId3 = batchMgr.startNewBatch(None)
   Thread.sleep(1000)
   val batch3 = batchMgr.freezeAndGetBatch(batchId3)
   println()
