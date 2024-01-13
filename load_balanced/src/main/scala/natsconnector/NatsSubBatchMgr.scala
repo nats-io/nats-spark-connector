@@ -3,27 +3,36 @@ package natsconnector
 import scala.collection.mutable.Map
 import scala.collection.mutable.ListBuffer
 import io.nats.client.Message
+
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import org.apache.hadoop.shaded.com.google.protobuf
+
+import java.util.zip.Inflater
 //import net.razorvine.pyro
 import io.nats.client.Nats
 import java.nio.charset.StandardCharsets
 import org.apache.spark.sql.Row
 import org.apache.log4j.Logger
 import org.apache.spark.sql.SparkSession
+import java.util.zip
 
 class NatsSubBatchMgr {
   val isLocal = false
+  var payloadCompression:Option[String] = None
   val batchMap:Map[String, List[Message]] = Map.empty[String, List[Message]]
   var batcherMap:Map[String, Batcher] = Map.empty[String, Batcher]
   //val natsSubscriber:NatsSubscriber = new NatsSubscriber()
 
-  def startNewBatch():String = {
+  def startNewBatch(payloadCompression:Option[String]):String = {
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
       logger.info("===================In NatsSubBatchMgr.startNewBatch")
     }
+
+    this.payloadCompression = payloadCompression
+
+
     val batcher = new Batcher()
     val batcherThread = new Thread(batcher)
     batcherThread.start()
@@ -41,9 +50,9 @@ class NatsSubBatchMgr {
     if(this.batcherMap.contains(batchId)) {
       val batcher = this.batcherMap(batchId)
       val b:List[Message] = batcher.stopAndGetBatch()
-      batch = convertBatch(b) 
-      this.batcherMap -= (batchId) 
-      this.batchMap += (batchId -> b)  
+      batch = convertBatch(b)
+      this.batcherMap -= (batchId)
+      this.batchMap += (batchId -> b)
     }
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
@@ -86,13 +95,47 @@ class NatsSubBatchMgr {
     new NatsPublisher().sendNatsMsg(msg)
   }
 
+  private def decompress(inData: Array[Byte]): Array[Byte] = {
+    val inflater = new Inflater()
+    inflater.setInput(inData)
+    val decompressedData = new Array[Byte](inData.size * 2)
+    var count = inflater.inflate(decompressedData)
+    var finalData = decompressedData.take(count)
+    while (count > 0) {
+      count = inflater.inflate(decompressedData)
+      finalData = finalData ++ decompressedData.take(count)
+    }
+    return finalData
+  }
+
   private def convertBatch(in:List[Message]):List[NatsMsg] = {
     var buffer:ListBuffer[NatsMsg] = ListBuffer.empty[NatsMsg]
     val df:DateTimeFormatter = DateTimeFormatter.ofPattern(NatsConfigSource.config.dateTimeFormat)
-    in.foreach(msg => buffer+=(
-          new NatsMsg(msg.getSubject(),
+
+    if (this.payloadCompression.isDefined) {
+      val compressionAlgo = this.payloadCompression.get
+      compressionAlgo match {
+        case "zlib" => {
+          in.foreach(msg => buffer+=(
+              NatsMsg(msg.getSubject(),
+                          msg.metaData().timestamp().format(df),
+                          new String(decompress(msg.getData), StandardCharsets.US_ASCII)))
+            )
+        }
+        case "uncompressed" | "none" => {
+          in.foreach(msg => buffer+=(
+              NatsMsg(msg.getSubject(),
+                          msg.metaData().timestamp().format(df),
+                          new String(msg.getData(), StandardCharsets.US_ASCII)))
+            )
+        }
+        case _ => throw new Exception(s"Unsupported compression algorithm:${compressionAlgo}")
+      }
+    } else
+      in.foreach(msg => buffer+=(
+          NatsMsg(msg.getSubject(),
                       msg.metaData().timestamp().format(df),
-                      new String(msg.getData, StandardCharsets.US_ASCII)))
+                      new String(msg.getData(), StandardCharsets.US_ASCII)))
         )
     buffer.toList
   }

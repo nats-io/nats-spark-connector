@@ -29,6 +29,15 @@ class NatsStreamingSource(sqlContext: SQLContext,
     val logger:Logger = NatsLogger.logger
     private var currentOffset: NatsOffset = new NatsOffset(None)
     private var batchMgr:NatsSubBatchMgr = new NatsSubBatchMgr()
+    private var payloadCompression:Option[String] = None
+
+    try {
+        val compression = parameters("nats.storage.payload-compression")
+        // num of replicas is set to '1' by default
+        this.payloadCompression = Some(compression)
+    } catch {
+        case e: NoSuchElementException =>
+    }
     override def stop(): Unit = {
         val nc = NatsConfigSource.config.nc
         nc.get.close()
@@ -43,7 +52,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
         val offsetList: MutableList[String] = MutableList()
         if(currentOffset.offset == None) {
             for(listener <- 0 until numListeners) {
-                val batchId = getBatchMgr().startNewBatch()
+                val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
                 offsetList += batchId
             }
             this.currentOffset = NatsOffset(Some(NatsBatchInfo(offsetList.toList)))
@@ -88,7 +97,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
         val numListeners = NatsConfigSource.config.numListeners
         val offsetList: MutableList[String] = MutableList()
         for(listener <- 0 until numListeners) {
-            val batchId = getBatchMgr().startNewBatch()
+            val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
             offsetList += batchId
         }
         this.currentOffset = NatsOffset(Some(NatsBatchInfo(offsetList.toList)))
