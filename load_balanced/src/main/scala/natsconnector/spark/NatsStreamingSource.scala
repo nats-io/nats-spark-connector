@@ -2,23 +2,27 @@ package natsconnector.spark
 
 import natsconnector.NatsConfigSource
 import natsconnector.NatsConfigSink
+
 import scala.util.control._
 import org.apache.spark.sql.execution.streaming.Source
-import org.apache.spark.sql.{SQLContext, DataFrame}
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.execution.streaming.Offset
 import natsconnector.NatsSubBatchMgr
 import natsconnector.NatsConfig
 import natsconnector.NatsMsg
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.unsafe.types.{UTF8String, ByteArray}
+import org.apache.spark.unsafe.types.{ByteArray, UTF8String}
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.DataType
-import java.time.ZonedDateTime
+
+import java.time.{Duration, ZonedDateTime}
 import java.time.format.DateTimeFormatter
 import scala.collection.mutable.MutableList
 import natsconnector.NatsLogger
 import org.apache.log4j.Logger
+
+import scala.concurrent.TimeoutException
 
 
 class NatsStreamingSource(sqlContext: SQLContext, 
@@ -33,14 +37,17 @@ class NatsStreamingSource(sqlContext: SQLContext,
 
     try {
         val compression = parameters("nats.storage.payload-compression")
-        // num of replicas is set to '1' by default
         this.payloadCompression = Some(compression)
     } catch {
         case e: NoSuchElementException =>
     }
     override def stop(): Unit = {
         val nc = NatsConfigSource.config.nc
-        nc.get.close()
+        try {
+            nc.get.drain(Duration.ofSeconds(30))
+        } catch {
+            case e: TimeoutException => this.logger.error(s"Timeout draining NATS connection: ${e.getMessage()}")
+        }
     }
 
     override def schema: StructType = userDefinedSchema.get

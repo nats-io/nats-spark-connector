@@ -105,7 +105,9 @@ class NatsConfig(isSource: Boolean) {
         this.streamName = Some(parameters(param))
 
         param = "nats.stream.subjects"
-        this.streamSubjects = Some(parameters(param).replace(" ", ""))
+        if (parameters.isDefinedAt(param)) {
+          this.streamSubjects = Some(parameters(param).replace(" ", ""))
+        }
 
         param = "nats.msg.ack.wait.secs"
         this.msgAckWaitTime = Duration.ofSeconds(parameters(param).toLong)

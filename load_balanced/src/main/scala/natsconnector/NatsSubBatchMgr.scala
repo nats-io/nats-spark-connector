@@ -58,7 +58,7 @@ class NatsSubBatchMgr {
       val logger:Logger = NatsLogger.logger
       logger.debug(
         s"-------- Batch for ID = ${batchId} in internal NatsMsg format:\n"
-        + s"${batch.foreach(r => logger.debug("  "+r))}"
+          + s"${batch.foreach(r => logger.debug("  "+r))}"
       )
     }
     batch
@@ -75,7 +75,7 @@ class NatsSubBatchMgr {
       if(this.isLocal) {
         val logger:Logger = NatsLogger.logger
         logger.debug(
-            s"-------- Committed Nats message batch for ID = ${batchId}:\n"
+          s"-------- Committed Nats message batch for ID = ${batchId}:\n"
             + s"${batch.foreach(r => logger.debug("  "+r))}"
         )
       }
@@ -86,8 +86,8 @@ class NatsSubBatchMgr {
   }
 
   def publishBatch(batch:List[NatsMsg]):Unit = {
-      val natsPublisher:NatsPublisher = new NatsPublisher()
-      batch.foreach(msg => natsPublisher.sendNatsMsg(msg))
+    val natsPublisher:NatsPublisher = new NatsPublisher()
+    batch.foreach(msg => natsPublisher.sendNatsMsg(msg))
   }
 
 
@@ -112,50 +112,63 @@ class NatsSubBatchMgr {
     var buffer:ListBuffer[NatsMsg] = ListBuffer.empty[NatsMsg]
     val df:DateTimeFormatter = DateTimeFormatter.ofPattern(NatsConfigSource.config.dateTimeFormat)
 
+    def uncompressed(msg:Message):NatsMsg = {
+      NatsMsg(msg.getSubject(),
+        msg.metaData().timestamp().format(df),
+        new String(msg.getData(), StandardCharsets.US_ASCII))
+    }
+
+    def compressed(msg:Message):NatsMsg = {
+      NatsMsg(msg.getSubject(),
+        msg.metaData().timestamp().format(df),
+        new String(decompress(msg.getData()), StandardCharsets.US_ASCII))
+    }
+
     if (this.payloadCompression.isDefined) {
       val compressionAlgo = this.payloadCompression.get
       compressionAlgo match {
-        case "zlib" => {
-          in.foreach(msg => buffer+=(
-              NatsMsg(msg.getSubject(),
-                          msg.metaData().timestamp().format(df),
-                          new String(decompress(msg.getData), StandardCharsets.US_ASCII)))
-            )
-        }
-        case "uncompressed" | "none" => {
-          in.foreach(msg => buffer+=(
-              NatsMsg(msg.getSubject(),
-                          msg.metaData().timestamp().format(df),
-                          new String(msg.getData(), StandardCharsets.US_ASCII)))
-            )
-        }
-        case _ => throw new Exception(s"Unsupported compression algorithm:${compressionAlgo}")
+        case "zlib" =>
+          in.foreach(msg => {
+            try {
+              buffer += compressed(msg)
+            } catch {
+              case _: Exception =>
+                // Couldn't decompress, so just add the raw message rather than failing the whole batch was requested
+                if(this.isLocal) {
+                  val logger:Logger = NatsLogger.logger
+                  logger.error(s"Failed to decompress a message payload using compression ${compressionAlgo}, adding the message as-is to the batch")
+                }
+                buffer+= uncompressed(msg)
+            }
+          })
+        case "uncompressed" | "none" =>
+          in.foreach(msg => buffer+= uncompressed(msg))
+        case _ => throw new Exception(s"Unsupported compression: ${compressionAlgo}")
       }
-    } else
-      in.foreach(msg => buffer+=(
-          NatsMsg(msg.getSubject(),
-                      msg.metaData().timestamp().format(df),
-                      new String(msg.getData(), StandardCharsets.US_ASCII)))
-        )
+    } else {
+      in.foreach(msg => buffer+= uncompressed(msg))
+    }
+
     buffer.toList
   }
 
 }
 
-case class NatsMsg(val subject:String, val dateTime:String, val content:String) 
+case class NatsMsg(val subject:String, val dateTime:String, val content:String)
 
 class Batcher() extends Runnable {
   var buffer:ListBuffer[Message] = ListBuffer.empty[Message]
   val natsSubscriber = new NatsSubscriber()
   var doRun = true
   var semaphore = false
- 
+
   override def run(): Unit = {
     this.doRun = true
+    var start = System.currentTimeMillis()
     while(this.doRun) {
       pullAndLoadBatch()
     }
-    natsSubscriber.unsubscribe()    
+    natsSubscriber.unsubscribe()
   }
 
   def stopAndGetBatch():List[Message] = {

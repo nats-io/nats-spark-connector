@@ -141,7 +141,7 @@ Possible options are:
 
 - "nats.msg.receive.wait.millis"
   The maximum amount of time a consumer will wait if no messages to consume.
-  See "nats.msg.fetch.batch.size". Default is 60 seconds.
+  See "nats.msg.fetch.batch.size". Default is 50 milliseconds.
 
 - "nats.durable.name"
   Durable subscriptions allow clients to assign a durable name to a subscription
@@ -183,6 +183,11 @@ Possible options are:
   chance. Note, the randomization of the server list doesn't occur per attempt,
   it is performed once at the start, so if there are 2 servers in the list you
   will never encounter the reconnect wait. Default is 20 seconds.
+
+- "nats.storage.payload-compression"
+  Specifies the compression type to be used to decompress the payload of the message. 
+  Currently supported values are: `"zlib"`,`"uncompressed"` and `"none"`.
+  If the payload of a particular message can not be decompressed, it is then passed on as-is.
 
 ### Spark Streaming Sink Options
 An example Scala sink configuration for the NATS connector follows:
