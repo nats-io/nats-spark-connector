@@ -34,9 +34,12 @@ class NatsPublisher {
   }
 
   def sendNatsMsg(data:String, subject:String):Unit = {
+    val headers:Headers = new Headers()
+
     val msg = NatsMessage.builder()
               .data(data.getBytes(StandardCharsets.US_ASCII))
               .subject(subject)
+      .headers(headers)
               .build()
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger

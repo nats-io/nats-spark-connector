@@ -49,8 +49,8 @@ class NatsStreamingSink(sqlContext: SQLContext,
     val rdd: RDD[Row] = data.sparkSession.sparkContext.parallelize(data.collect())
     val df = data.sparkSession.createDataFrame(rdd, data.schema)
 
-    val natsMsgDataset = df.map(row => 
-                     new NatsMsg(row.getString(0), row.getString(1), row.getString(2)))
+    val natsMsgDataset = df.map(row =>
+                     new NatsMsg(row.getString(0), row.getString(1), row.getString(2), None, null))
 
     val natsMsgs: Seq[NatsMsg] = natsMsgDataset.collect().toSeq
 

@@ -130,10 +130,16 @@ class NatsStreamingSource(sqlContext: SQLContext,
     private def convertNatsMsgListtoInternalRowSeq(natsBatch:List[NatsMsg]):Seq[InternalRow] = {
         val msgSeq = natsBatch.toSeq
         val rowSeq:Seq[InternalRow] = msgSeq.map(msg => {
-                                            val gir = new GenericInternalRow(3)
-                                            gir.update(0, UTF8String.fromString(msg.subject.toString()))
+                                            val gir = new GenericInternalRow(5)
+                                            gir.update(0, UTF8String.fromString(msg.subject))
                                             gir.update(1, UTF8String.fromString(msg.dateTime))
-                                            gir.update(2, UTF8String.fromString(msg.content.toString())) 
+                                            gir.update(2, UTF8String.fromString(msg.content))
+                                            if (msg.headers.isDefined) {
+                                                gir.update(3, UTF8String.fromString(msg.headersToJson()))
+                                            }
+                                            if (msg.jsMetaData != null) {
+                                                gir.update(4, UTF8String.fromString(msg.jSMetaDataToJson()))
+                                            }
                                             gir })
        
         this.logger.debug(
