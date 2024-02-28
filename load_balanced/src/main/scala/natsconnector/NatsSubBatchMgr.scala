@@ -3,12 +3,15 @@ package natsconnector
 import scala.collection.mutable.Map
 import scala.collection.mutable.ListBuffer
 import io.nats.client.Message
+import io.nats.client.impl.NatsJetStreamMetaData
 
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import org.apache.hadoop.shaded.com.google.protobuf
 
 import java.util.zip.Inflater
+import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
+import scala.collection.mutable
 //import net.razorvine.pyro
 import io.nats.client.Nats
 import java.nio.charset.StandardCharsets
@@ -112,16 +115,33 @@ class NatsSubBatchMgr {
     var buffer:ListBuffer[NatsMsg] = ListBuffer.empty[NatsMsg]
     val df:DateTimeFormatter = DateTimeFormatter.ofPattern(NatsConfigSource.config.dateTimeFormat)
 
+   def getHeaders (msg:Message):Option[Map[String, List[String]]] = {
+     if (msg.hasHeaders) {
+       val msgHeaders = mutable.Map[String, List[String]]()
+       val hdrs = msg.getHeaders
+       hdrs.entrySet().forEach(entry => {
+         val key = entry.getKey
+         val value = entry.getValue
+
+         msgHeaders(key)= value.toList
+       })
+       Some(msgHeaders)
+     } else {
+       None
+     }
+    }
+
     def uncompressed(msg:Message):NatsMsg = {
+
       NatsMsg(msg.getSubject(),
         msg.metaData().timestamp().format(df),
-        new String(msg.getData(), StandardCharsets.US_ASCII))
+        new String(msg.getData(), StandardCharsets.US_ASCII), getHeaders(msg), msg.metaData())
     }
 
     def compressed(msg:Message):NatsMsg = {
       NatsMsg(msg.getSubject(),
         msg.metaData().timestamp().format(df),
-        new String(decompress(msg.getData()), StandardCharsets.US_ASCII))
+        new String(decompress(msg.getData()), StandardCharsets.US_ASCII), getHeaders(msg), msg.metaData())
     }
 
     if (this.payloadCompression.isDefined) {
@@ -154,7 +174,27 @@ class NatsSubBatchMgr {
 
 }
 
-case class NatsMsg(val subject:String, val dateTime:String, val content:String)
+case class NatsMsg(val subject:String, val dateTime:String, val content:String, val headers:Option[Map[String, List[String]]], val jsMetaData:NatsJetStreamMetaData) {
+  override def toString():String = {
+    s"""{"subject": "${subject}", "Datetime": "${dateTime}", "payload": "${content}", "headers": ${headersToJson()}, "js-metadata": ${jSMetaDataToJson()}}"""
+  }
+
+  def headersToJson():String = {
+    if (headers.isDefined) {
+      "{ " + headers.get.map(entry => s""""${entry._1}": "${entry._2.mkString(",")}"""").mkString(", ") + " }"
+    } else {
+      ""
+    }
+  }
+
+  def jSMetaDataToJson():String = {
+    if (jsMetaData != null) {
+      s"""{"jsMetaData": {"stream" : "${jsMetaData.getStream}", "streamSeq" :  ${jsMetaData.streamSequence()}, "consumerSeq" : ${jsMetaData.consumerSequence()}, "delivered" : ${jsMetaData.deliveredCount()}, "pending" : ${jsMetaData.pendingCount()}, "timestamp" : "${jsMetaData.timestamp()}"}}"""
+    } else {
+      ""
+    }
+  }
+}
 
 class Batcher() extends Runnable {
   var buffer:ListBuffer[Message] = ListBuffer.empty[Message]
