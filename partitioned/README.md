@@ -1,5 +1,8 @@
 # NATS-SPARK CONNECTOR
 
+# Important notice
+***The partitioned connector is not being actively developed anymore. It is now considered legacy and included only for educational purposes only***
+
 ## Overview
 This flavor of NATS-Spark connector maps JetStream partitions to a Spark
 micro-batch streaming job.
