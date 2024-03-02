@@ -1,10 +1,10 @@
 import sbt.Def.settings
 
 name := "nats-spark-connector-balanced"
-version := "1.2.2"
+version := "1.2.3"
 scalaVersion := "2.12.14"
 
-val sparkVersion = "3.3.0"
+val sparkVersion = "3.3.4"
 val vegasVersion = "0.3.11"
 val postgresVersion = "42.2.2"
 val slf4jVersion = "2.0.3"
