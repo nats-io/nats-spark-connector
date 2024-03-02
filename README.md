@@ -1,7 +1,9 @@
 # NATS-SPARK-CONNECTOR
 
 The following are all the current flavors of the nats-spark-connector, each flavor
-has its own directory structure. If you are unsure of which flavor to use, just go with 'balanced'.
+has its own directory structure. 
+
+At this point, the partitioned connector is not being actively developed anymore. It is now considered legacy and included only for educational purposes only. It will be removed entirely in the future.
 
 - **balanced:**
   In this scenario, NATS utilizes a single JetStream partition, using a durable
@@ -14,6 +16,8 @@ has its own directory structure. If you are unsure of which flavor to use, just 
 This flavor is contained in the subdirectory **'balanced'**, which
 has its own README.md containing further information.
 
+
+**LEGACY: USE BALANCED INSTEAD** 
 - **partitioned:**
 In this scenario, NATS utilizes a number of JetStream partitions named
 *<partition_prefix>-0*, *<partition_prefix>-1*, ..., *<partition_prefix>-N*, each
