@@ -46,7 +46,7 @@ object NatsSparkConnectorTestDriver extends App {
     //.config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")
     .config("spark.jars", 
     "/Users/sergiosennder/stuff/work/synadia/spark-connector/partitioned/nats-spark-connector/target/scala-2.12/nats-spark-connector_2.12-0.1.jar,"
-    + "/Users/sergiosennder/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/io/nats/jnats/2.13.2/jnats-2.13.2.jar"
+    + "/Users/sergiosennder/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/io/nats/jnats/2.17.4/jnats-2.17.4.jar"
     )
     .config("spark.executor.instances", "2")
     .config("spark.cores.max", "4")

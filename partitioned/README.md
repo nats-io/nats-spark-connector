@@ -77,7 +77,7 @@ val spark = SparkSession
   .config("spark.logConf", "false")
   .config("spark.jars",
   "/some_path_to_the_connector_jar/nats-spark-connector_2.12-0.1.jar,"
-  + "/some_path_to_the_Nats_jar/jnats-2.13.2.jar"
+  + "/some_path_to_the_Nats_jar/jnats-2.17.4.jar"
   )
   .config("spark.executor.instances", "2")
   .config("spark.cores.max", "4")
