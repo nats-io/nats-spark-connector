@@ -11,7 +11,7 @@ val slf4jVersion = "2.0.3"
 
 //libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
 libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.12.14"
-libraryDependencies += "io.nats" % "jnats" % "2.17.3"
+libraryDependencies += "io.nats" % "jnats" % "2.17.4"
 
 resolvers ++= Seq(
   "MavenRepository2" at "https://mvnrepository.com",

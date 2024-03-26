@@ -77,6 +77,12 @@ class NatsConfig(isSource: Boolean) {
   var jsAPIPrefix: Option[String] = None // configurable
   var userName: Option[String] = None // configurable
   var userPassword: Option[String] = None // configurable
+  var sslContextFactoryClass: Option[String] = None // configurable
+  var keystorePath: Option[String] = None // configurable
+  var keystorePassword: Option[String] = None // configurable
+  var truststorePath: Option[String] = None // configurable
+  var truststorePassword: Option[String] = None // configurable
+  var tlsAlgorithm: Option[String] = None // configurable
 
   // ============== Application Config Values
   val dateTimeFormat = "MM/dd/yyyy - HH:mm:ss Z"
@@ -234,8 +240,50 @@ class NatsConfig(isSource: Boolean) {
       case e: NoSuchElementException =>
     }
 
+    try {
+      val param = parameters("nats.ssl.context.factory.class").toBoolean
+      this.sslContextFactoryClass = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      val param = parameters("nats.key-store.path").toBoolean
+      this.keystorePath = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      val param = parameters("nats.key-store.password").toBoolean
+      this.keystorePassword = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      val param = parameters("nats.trust-store.path").toBoolean
+      this.truststorePath = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      val param = parameters("nats.trust-store.password").toBoolean
+      this.truststorePassword = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      val param = parameters("nats.tls.algorithm").toBoolean
+      this.tlsAlgorithm = param
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
     this.server = Some(s"nats://${this.host}:${this.port}")
-    this.options = Some(createConnectionOptions(this.server.get, this.allowReconnect))
+    this.options = Some(createConnectionOptions())
 
     if (this.isLocal) {
       val logger: Logger = NatsLogger.logger
@@ -266,6 +314,12 @@ class NatsConfig(isSource: Boolean) {
           + s"msgAckWaitTime = ${this.msgAckWaitTime}\n"
           + s"dateTimeFormat = ${this.dateTimeFormat}\n"
           + s"numListeners = ${this.numListeners}\n"
+          + s"sslContextFactoryClass = ${this.sslContextFactoryClass}\n"
+          + s"keystorePath] js= ${this.keystorePath}\n"
+          + s"keystorePassword = ${this.keystorePassword}\n"
+          + s"truststorePath = ${this.truststorePath}\n"
+          + s"truststorePassword = ${this.truststorePassword}\n"
+          + s"tlsAlgorithm = ${this.tlsAlgorithm}\n"
           + s"[Connection] options = ${this.options}\n"
           + s"[Nats connection] nc = ${this.nc}\n"
           + s"[JetStream context] js= ${this.js}\n"
@@ -386,10 +440,7 @@ class NatsConfig(isSource: Boolean) {
     }
   }
 
-  private def createConnectionOptions(
-                                       server: String,
-                                       allowReconnect: Boolean
-                                     ): Options = {
+  private def createConnectionOptions(): Options = {
     val el = new ErrorListener() {
       override def exceptionOccurred(conn: Connection, exp: Exception): Unit = {
         System.out.println("Exception " + exp.getMessage());
@@ -439,12 +490,20 @@ class NatsConfig(isSource: Boolean) {
     if (System.getenv("NATS_TLS_ALGO") != null && System.getenv("NATS_TLS_ALGO") != "") {
       builder.tlsAlgorithm(System.getenv("NATS_TLS_ALGO"))
     }
+    else if (this.tlsAlgorithm.isDefined) {
+      builder.tlsAlgorithm(this.tlsAlgorithm.get)
+    }
 
     if (System.getenv("NATS_TLS_TRUST_STORE") != null && System.getenv("NATS_TLS_TRUST_STORE") != "") {
-
       builder.truststorePath(System.getenv("NATS_TLS_TRUST_STORE"));
       if (System.getenv("NATS_TLS_TRUST_STORE_PASSWORD") != null) {
         builder.truststorePassword(System.getenv("NATS_TLS_TRUST_STORE_PASSWORD").toCharArray)
+      }
+    }
+    else if (this.truststorePath.isDefined) {
+      builder.truststorePath(this.truststorePath.get);
+      if (this.truststorePassword.isDefined) {
+        builder.truststorePassword(this.truststorePassword.get.toCharArray)
       }
     }
 
@@ -453,6 +512,16 @@ class NatsConfig(isSource: Boolean) {
         builder.keystorePassword(System.getenv("NATS_TLS_KEY_STORE_PASSWORD").toCharArray)
       }
       builder.keystorePath(System.getenv("NATS_TLS_KEY_STORE"));
+    }
+    else if (this.keystorePath.isDefined) {
+      builder.keystorePath(this.keystorePath.get);
+      if (this.keystorePassword.isDefined) {
+        builder.keystorePassword(this.keystorePassword.get.toCharArray)
+      }
+    }
+
+    if (this.sslContextFactoryClass.isDefined) {
+      builder.sslContextFactory((SSLContextFactory)Class.forName(this.sslContextFactoryClass.get).newInstance())
     }
 
     if (this.userName.isDefined) {
