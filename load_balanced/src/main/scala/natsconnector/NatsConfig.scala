@@ -12,11 +12,14 @@ import io.nats.client.api.ConsumerConfiguration
 import io.nats.client.api.AckPolicy
 import io.nats.client.api.RetentionPolicy
 import io.nats.client.api.DeliverPolicy
+import io.nats.client.impl.SSLContextFactory
 
 import scala.collection.JavaConverters._
 import org.apache.log4j.PropertyConfigurator
 import org.apache.log4j.Logger
 import org.apache.log4j.Level
+
+import java.lang.reflect._
 
 import java.util.Properties
 import org.apache.spark.sql.SparkSession
@@ -241,43 +244,43 @@ class NatsConfig(isSource: Boolean) {
     }
 
     try {
-      val param = parameters("nats.ssl.context.factory.class").toBoolean
-      this.sslContextFactoryClass = param
+      val param = parameters("nats.ssl.context.factory.class")
+      this.sslContextFactoryClass = Some(param)
     } catch {
       case e: NoSuchElementException =>
     }
 
     try {
-      val param = parameters("nats.key-store.path").toBoolean
-      this.keystorePath = param
+      val param = parameters("nats.key-store.path")
+      this.keystorePath = Some(param)
     } catch {
       case e: NoSuchElementException =>
     }
 
     try {
-      val param = parameters("nats.key-store.password").toBoolean
-      this.keystorePassword = param
+      val param = parameters("nats.key-store.password")
+      this.keystorePassword = Some(param)
     } catch {
       case e: NoSuchElementException =>
     }
 
     try {
-      val param = parameters("nats.trust-store.path").toBoolean
-      this.truststorePath = param
+      val param = parameters("nats.trust-store.path")
+      this.truststorePath = Some(param)
     } catch {
       case e: NoSuchElementException =>
     }
 
     try {
-      val param = parameters("nats.trust-store.password").toBoolean
-      this.truststorePassword = param
+      val param = parameters("nats.trust-store.password")
+      this.truststorePassword = Some(param)
     } catch {
       case e: NoSuchElementException =>
     }
 
     try {
-      val param = parameters("nats.tls.algorithm").toBoolean
-      this.tlsAlgorithm = param
+      val param = parameters("nats.tls.algorithm")
+      this.tlsAlgorithm = Some(param)
     } catch {
       case e: NoSuchElementException =>
     }
@@ -521,7 +524,14 @@ class NatsConfig(isSource: Boolean) {
     }
 
     if (this.sslContextFactoryClass.isDefined) {
-      builder.sslContextFactory((SSLContextFactory)Class.forName(this.sslContextFactoryClass.get).newInstance())
+      Class.forName(this.sslContextFactoryClass.get) match {
+        case c if classOf[SSLContextFactory].isAssignableFrom(c) =>
+          builder.sslContextFactory(c.asInstanceOf[Class[SSLContextFactory]].newInstance())
+        case _ =>
+          throw new IllegalArgumentException(
+            "The class provided for sslContextFactoryClass must be a subclass of SSLContextFactory"
+          )
+      }
     }
 
     if (this.userName.isDefined) {
