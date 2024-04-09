@@ -33,13 +33,13 @@ class NatsStreamingSink(sqlContext: SQLContext,
     val sparkSession:SparkSession = sqlContext.sparkSession
     import sparkSession.implicits._
 
-    val sendNatsMsg = (subject:String, dateTime:String, data:String) => {
+    val sendNatsMsg = (subject:String, dateTime:String, data:Array[Byte]) => {
       //val options = NatsConfig.config.options
       // println(s"Options: $options")
       val headers:Headers = new Headers()
       headers.add("originTimestamp", dateTime)
       val natsMsg = NatsMessage.builder()
-              .data(data.getBytes(StandardCharsets.US_ASCII))
+              .data(data)
               .subject(subject)
               .headers(headers)
               .build()
@@ -50,7 +50,7 @@ class NatsStreamingSink(sqlContext: SQLContext,
     val df = data.sparkSession.createDataFrame(rdd, data.schema)
 
     val natsMsgDataset = df.map(row =>
-                     new NatsMsg(row.getString(0), row.getString(1), row.getString(2), None, null))
+                     new NatsMsg(row.getString(0), row.getString(1), row.getString(2).getBytes, None, null))
 
     val natsMsgs: Seq[NatsMsg] = natsMsgDataset.collect().toSeq
 

@@ -8,6 +8,7 @@ import io.nats.client.impl.NatsJetStreamMetaData
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import org.apache.hadoop.shaded.com.google.protobuf
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.zip.Inflater
 import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
@@ -135,13 +136,13 @@ class NatsSubBatchMgr {
 
       NatsMsg(msg.getSubject(),
         msg.metaData().timestamp().format(df),
-        new String(msg.getData(), StandardCharsets.US_ASCII), getHeaders(msg), msg.metaData())
+        msg.getData(), getHeaders(msg), msg.metaData())
     }
 
     def compressed(msg:Message):NatsMsg = {
       NatsMsg(msg.getSubject(),
         msg.metaData().timestamp().format(df),
-        new String(decompress(msg.getData()), StandardCharsets.US_ASCII), getHeaders(msg), msg.metaData())
+        decompress(msg.getData()), getHeaders(msg), msg.metaData())
     }
 
     if (this.payloadCompression.isDefined) {
@@ -174,9 +175,9 @@ class NatsSubBatchMgr {
 
 }
 
-case class NatsMsg(val subject:String, val dateTime:String, val content:String, val headers:Option[Map[String, List[String]]], val jsMetaData:NatsJetStreamMetaData) {
+case class NatsMsg(val subject:String, val dateTime:String, val content:Array[Byte], val headers:Option[Map[String, List[String]]], val jsMetaData:NatsJetStreamMetaData) {
   override def toString():String = {
-    s"""{"subject": "${subject}", "Datetime": "${dateTime}", "payload": "${content}", "headers": ${headersToJson()}, "js-metadata": ${jSMetaDataToJson()}}"""
+    s"""{"subject": "${subject}", "Datetime": "${dateTime}", "payload": "${UTF8String.fromBytes(content)}", "headers": ${headersToJson()}, "js-metadata": ${jSMetaDataToJson()}}"""
   }
 
   def headersToJson():String = {

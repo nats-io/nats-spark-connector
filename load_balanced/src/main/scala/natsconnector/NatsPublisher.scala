@@ -54,7 +54,7 @@ class NatsPublisher {
     val headers:Headers = new Headers()
     headers.add("originTimestamp", timestamp)
     val msg = NatsMessage.builder()
-              .data(natsMsg.content.getBytes(StandardCharsets.US_ASCII))
+              .data(natsMsg.content)
               .subject(natsMsg.subject)
               .headers(headers)
               .build()
