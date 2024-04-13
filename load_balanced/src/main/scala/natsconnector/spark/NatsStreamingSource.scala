@@ -133,7 +133,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
                                             val gir = new GenericInternalRow(5)
                                             gir.update(0, UTF8String.fromString(msg.subject))
                                             gir.update(1, UTF8String.fromString(msg.dateTime))
-                                            gir.update(2, UTF8String.fromString(msg.content))
+                                            gir.update(2, UTF8String.fromBytes(msg.content))
                                             if (msg.headers.isDefined) {
                                                 gir.update(3, UTF8String.fromString(msg.headersToJson()))
                                             }
