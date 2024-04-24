@@ -52,8 +52,7 @@ resending a message. These and other configurations are described in the
 
 ## Setting Up to Run the Connector
 ### Tying the Connector to Spark
-You may build the code in the IDE of your choice or you may utilize the jar
-located in the repository at 'target/scala-2.12/nats-spark-connector_2.12-0.1.jar'
+You may build the code using `sbt assembly` which will create the jar file.
 After placing the jar in a directory of your choice, point Spark to said
 directory by setting the Spark Session builder option "spark.jars".
 
@@ -188,6 +187,11 @@ Possible options are:
   Specifies the compression type to be used to decompress the payload of the message. 
   Currently supported values are: `"zlib"`,`"uncompressed"` and `"none"`.
   If the payload of a particular message can not be decompressed, it is then passed on as-is.
+
+- "nats.datetime.format"
+  Specifies the format of the date time in the second column of the row, which is the time at
+  which the message was received from NATS (the time the message was recorded into the stream
+  is included in the JS Metadata column JSON).
 
 ### Spark Streaming Sink Options
 An example Scala sink configuration for the NATS connector follows:

@@ -135,13 +135,13 @@ class NatsSubBatchMgr {
     def uncompressed(msg:Message):NatsMsg = {
 
       NatsMsg(msg.getSubject(),
-        msg.metaData().timestamp().format(df),
+        ZonedDateTime.now().format(df),
         msg.getData(), getHeaders(msg), msg.metaData())
     }
 
     def compressed(msg:Message):NatsMsg = {
       NatsMsg(msg.getSubject(),
-        msg.metaData().timestamp().format(df),
+        ZonedDateTime.now().format(df),
         decompress(msg.getData()), getHeaders(msg), msg.metaData())
     }
 
