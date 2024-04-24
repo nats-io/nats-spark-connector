@@ -88,7 +88,7 @@ class NatsConfig(isSource: Boolean) {
   var tlsAlgorithm: Option[String] = None // configurable
 
   // ============== Application Config Values
-  val dateTimeFormat = "MM/dd/yyyy - HH:mm:ss Z"
+  var dateTimeFormat = "MM/dd/yyyy - HH:mm:ss Z" // configurable
 
   // Nats connection
   var options: Option[Options] = None
@@ -132,6 +132,12 @@ class NatsConfig(isSource: Boolean) {
     }
 
     // Optional parameters
+    try {
+      this.dateTimeFormat = parameters("nats.datetime.format")
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
     try {
       this.numListeners = parameters("nats.num.listeners").toInt
     } catch {
@@ -526,7 +532,7 @@ class NatsConfig(isSource: Boolean) {
     if (this.sslContextFactoryClass.isDefined) {
       Class.forName(this.sslContextFactoryClass.get) match {
         case c if classOf[SSLContextFactory].isAssignableFrom(c) =>
-          builder.sslContextFactory(c.asInstanceOf[Class[SSLContextFactory]].newInstance())
+          builder.sslContextFactory(c.asInstanceOf[Class[SSLContextFactory]].getDeclaredConstructor().newInstance())
         case _ =>
           throw new IllegalArgumentException(
             "The class provided for sslContextFactoryClass must be a subclass of SSLContextFactory"
