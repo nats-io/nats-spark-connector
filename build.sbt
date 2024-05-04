@@ -1,0 +1,88 @@
+import ReleaseTransformations._
+
+ThisBuild / version := "2.0.0"
+
+name := "nats-spark-connector"
+
+organization := "io.nats"
+organizationName := "nats"
+startYear := Some(2024)
+licenses := Seq(License.Apache2)
+
+val Scala212 = "2.12.19"
+val Scala213 = "2.13.13"
+
+ThisBuild / crossScalaVersions := Seq(Scala212, Scala213)
+ThisBuild / scalaVersion := Scala212 // "the" default Scala
+
+ThisBuild / semanticdbEnabled := true // enable SemanticDB
+ThisBuild / semanticdbVersion := scalafixSemanticdb.revision // only required for Scala 2.x
+
+// TODO(@Marcus-Rosti): we HAVE to deploy to maven, I just don't know exactly how
+publishTo := None
+
+
+val sparkVersion = "3.5.1"
+val natsVersion = "2.17.6"
+val catsVersion = "2.10.0"
+
+val munitVersion = "0.7.29"
+
+// TODO(@Marcus-Rosti): build the other connector styles here
+lazy val root = (project in file(".")).aggregate(`nats-spark-connector`)
+
+lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).settings(
+  name := "nats-spark-connector",
+  Compile / scalacOptions ++= {
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, 12))  => List("-Ywarn-unused-import")
+      case Some((2, 13)) => List("-Wunused:imports")
+      case _ => Nil
+    }
+  },
+  // TODO(@Marcus-Rosti): fix all of these
+  Compile / compile / wartremoverErrors ++= Warts.allBut(
+      Wart.Null,
+      Wart.NonUnitStatements,
+      Wart.Throw,
+      Wart.Overloading,
+      Wart.Any,
+      Wart.StringPlusAny
+    ),
+    libraryDependencies ++= Seq(
+    // TODO(@Marcus-Rosti): This probably isn't required... could remove / refactor
+    "org.typelevel" %% "cats-core" % catsVersion,
+    "org.typelevel" %% "cats-kernel" % catsVersion,
+    // TODO(@Marcus-Rosti): Maybe we shouldn't require this, more of a BYO-jnats?
+    "io.nats" % "jnats" % natsVersion,
+  ) ++ Seq(
+    "org.apache.spark" %% "spark-core" % sparkVersion,
+    "org.apache.spark" %% "spark-unsafe" % sparkVersion,
+    "org.apache.spark" %% "spark-catalyst" % sparkVersion,
+    "org.apache.spark" %% "spark-sql" % sparkVersion,
+    "org.apache.spark" %% "spark-sql-api" % sparkVersion,
+    "org.apache.spark" %% "spark-common-utils" % sparkVersion,
+  ).map(_ % Provided) ++
+    Seq(
+      "org.scalameta" %% "munit" % munitVersion
+    ).map(_ % Test),
+  assembly / assemblyShadeRules := Seq(
+    ShadeRule.rename("shapeless.**" -> "nats_spark_internal.@1").inAll,
+    ShadeRule.rename("cats.kernel.**" -> s"nats_spark_internal.kernel.@1").inAll
+  ),
+  assemblyMergeStrategy := (_ => MergeStrategy.first)
+)
+
+releaseProcess := Seq[ReleaseStep](
+  checkSnapshotDependencies,              // : ReleaseStep
+  inquireVersions,                        // : ReleaseStep
+  runClean,                               // : ReleaseStep
+  runTest,                                // : ReleaseStep
+  setReleaseVersion,                      // : ReleaseStep
+  commitReleaseVersion,                   // : ReleaseStep, performs the initial git checks
+  tagRelease,                             // : ReleaseStep
+  publishArtifacts,                       // : ReleaseStep, checks whether `publishTo` is properly set up
+  setNextVersion,                         // : ReleaseStep
+  commitNextVersion,                      // : ReleaseStep
+  pushChanges                             // : ReleaseStep, also checks that an upstream branch is properly configured
+)
