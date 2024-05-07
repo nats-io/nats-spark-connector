@@ -14,6 +14,7 @@ package object nats {
   // Consumer Config
   val SourceConsumerCreateOption = "nats.pull.consumer.create"
   val SourceConsumerMsgAckTimeOption = "nats.pull.consumer.ack.wait"
+  val SourceConsumerMaxAckPendingOption = "nats.pull.consumer.max.ack.pending"
   val SourceConsumerMaxBatchOption = "nats.pull.consumer.max.batch"
   val SourceConsumerFilterSubjectsOption = "nats.stream.subjects"
 

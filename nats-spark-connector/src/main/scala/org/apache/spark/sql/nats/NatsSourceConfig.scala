@@ -7,6 +7,7 @@ final case class JetStreamConfig(host: String, port: Int, credentialsFile: Strin
 final case class ConsumerConfig(
     msgAckTime: FiniteDuration,
     maxBatch: Int,
+    maxAckPending: Int,
     filterSubjects: Seq[String],
     durableName: String
 )
@@ -50,6 +51,7 @@ object NatsSourceConfig {
     val createConsumer =
       defaultKey(SourceConsumerCreateOption, "true").toLowerCase(Locale.US).toBoolean
     val msgAckTime = defaultKey(SourceConsumerMsgAckTimeOption, "90").toInt.seconds
+    val maxAckPending = defaultKey(SourceConsumerMaxAckPendingOption, "1000").toInt
     val maxBatch = defaultKey(SourceConsumerMaxBatchOption, "100").toInt
     val filterSubjects =
       defaultKey(SourceConsumerFilterSubjectsOption, "").split(",")
@@ -65,7 +67,7 @@ object NatsSourceConfig {
       SubscriptionConfig(
         streamName,
         createConsumer,
-        ConsumerConfig(msgAckTime, maxBatch, filterSubjects, durableName),
+        ConsumerConfig(msgAckTime, maxBatch, maxAckPending, filterSubjects, durableName),
         BatcherConfig(initialDelay, frequencySecs, pullBatchSize, pullWaitTime)
       )
     )

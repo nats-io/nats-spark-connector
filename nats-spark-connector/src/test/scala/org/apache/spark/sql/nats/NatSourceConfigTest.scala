@@ -14,6 +14,7 @@ class NatSourceConfigTest extends FunSuite {
       "nats.pull.subscription.durable.name" -> "durable",
       "nats.pull.consumer.create" -> "false",
       "nats.pull.consumer.ack.wait" -> "1",
+      "nats.pull.consumer.max.ack.pending" -> "7",
       "nats.pull.consumer.max.batch" -> "2",
       "nats.stream.subjects" -> "a,b",
       "nats.pull.batcher.initial.delay" -> "3",
@@ -30,6 +31,7 @@ class NatSourceConfigTest extends FunSuite {
         ConsumerConfig(
           1.second,
           2,
+          7,
           Seq("a", "b"),
           "durable"
         ),

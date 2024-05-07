@@ -45,6 +45,7 @@ object NatsSubscriber {
       .builder()
       .durable(config.consumerConfig.durableName)
       .ackWait(config.consumerConfig.msgAckTime.toMillis)
+      .maxAckPending(config.consumerConfig.maxAckPending)
       .maxBatch(config.consumerConfig.maxBatch.toLong)
       .filterSubjects(config.consumerConfig.filterSubjects.asJava)
       .build()
