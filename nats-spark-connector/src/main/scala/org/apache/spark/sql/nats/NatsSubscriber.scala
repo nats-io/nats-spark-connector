@@ -50,10 +50,11 @@ object NatsSubscriber {
       .filterSubjects(config.consumerConfig.filterSubjects.asJava)
       .build()
 
-    if (config.createConsumer)
+    if (config.createConsumer) {
       connection
         .jetStreamManagement()
         .addOrUpdateConsumer(config.streamName, consumerConfiguration)
+    }
 
     val pullSubscribeOptions =
       PullSubscribeOptions
