@@ -193,6 +193,9 @@ Possible options are:
   which the message was received from NATS (the time the message was recorded into the stream
   is included in the JS Metadata column JSON).
 
+- "nats.ssl.context.factory.class"
+  Can be used to specify the name of your own SSL context factory class to use for the NATS connection.
+
 ### Spark Streaming Sink Options
 An example Scala sink configuration for the NATS connector follows:
 ```

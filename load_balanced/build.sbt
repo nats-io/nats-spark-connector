@@ -1,7 +1,7 @@
 import sbt.Def.settings
 
 name := "nats-spark-connector-balanced"
-version := "1.2.4-SNAPSHOT"
+version := "1.2.4"
 scalaVersion := "2.12.19"
 
 val sparkVersion = "3.3.4"
