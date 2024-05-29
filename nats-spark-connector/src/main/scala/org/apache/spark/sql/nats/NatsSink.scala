@@ -1,6 +1,8 @@
 package org.apache.spark.sql.nats
 
 import io.nats.client.Message
+import io.nats.client.Nats
+import io.nats.client.PublishOptions
 import io.nats.client.impl.Headers
 import io.nats.client.impl.NatsMessage
 import org.apache.spark.internal.Logging
@@ -9,6 +11,10 @@ import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
+import scala.util.Try
+
+@SuppressWarnings(Array("org.wartremover.warts.ArrayEquals"))
+final case class NatsPublisherConfig(secretBytes: Array[Byte], url: String, stream: String)
 
 object NatsSink {
   val schema: StructType = StructType(
@@ -19,7 +25,7 @@ object NatsSink {
     )
   )
 
-  def apply(natsPublisher: NatsPublisher): NatsSink = new NatsSink(natsPublisher)
+  def apply(natsPublisher: NatsPublisherConfig): NatsSink = new NatsSink(natsPublisher)
 }
 
 @SuppressWarnings(Array("org.wartremover.warts.ArrayEquals"))
@@ -45,7 +51,18 @@ object MessageBuilder {
   }
 }
 
-class NatsSink(natsPublisher: NatsPublisher) extends Sink with Logging {
+class NatsSink(natsPublisherConfig: NatsPublisherConfig) extends Sink with Logging {
+
+  private def publish(
+      natsPublisherConfig: NatsPublisherConfig): Iterator[NatsMessageRow] => Unit =
+    (iterator: Iterator[NatsMessageRow]) => {
+      val auth = Nats.staticCredentials(natsPublisherConfig.secretBytes)
+      val connection = Nats.connect(natsPublisherConfig.url, auth)
+      val jetStream = connection.jetStream()
+      val publishOptions = PublishOptions.builder().stream(natsPublisherConfig.stream).build()
+      iterator.map(MessageBuilder(_)).foreach(jetStream.publish(_, publishOptions))
+      connection.close()
+    }
 
   override def addBatch(batchId: Long, data: DataFrame): Unit = {
     import data.sparkSession.implicits._
@@ -55,9 +72,6 @@ class NatsSink(natsPublisher: NatsPublisher) extends Sink with Logging {
       .internalCreateDataFrame(data.queryExecution.toRdd, data.schema)
       .to(NatsSink.schema)
       .as[NatsMessageRow]
-      // TODO(mrosti): there has to be a way around collect but idk how to serialize the JS client
-      .collect()
-      .map(MessageBuilder(_))
-      .foreach(natsPublisher.push)
+      .foreachPartition(publish(natsPublisherConfig))
   }
 }

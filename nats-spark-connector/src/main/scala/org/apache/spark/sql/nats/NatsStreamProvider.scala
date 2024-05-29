@@ -11,6 +11,8 @@ import org.apache.spark.sql.sources.StreamSourceProvider
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.{Duration => JDuration}
 import scala.concurrent.duration.DurationInt
 
@@ -65,14 +67,11 @@ class NatsStreamProvider
       partitionColumns: Seq[String],
       outputMode: OutputMode): Sink = {
     val config = NatsSinkConfig(parameters)
-    val auth = Nats.credentials(config.jetStreamConfig.credentialsFile)
-    val connection = Nats.connect(
+    val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
+    val publisherConfig = NatsPublisherConfig(
+      authFileBytes,
       s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}",
-      auth)
-    val jetStream = connection.jetStream()
-
-    val publisher = NatsPublisher(jetStream, config.stream)
-
-    NatsSink(publisher)
+      config.stream)
+    NatsSink(publisherConfig)
   }
 }
