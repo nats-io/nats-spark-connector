@@ -37,7 +37,7 @@ class NatsPublisher {
     val headers:Headers = new Headers()
 
     val msg = NatsMessage.builder()
-              .data(data.getBytes(StandardCharsets.US_ASCII))
+              .data(data.getBytes(StandardCharsets.UTF_8))
               .subject(subject)
       .headers(headers)
               .build()

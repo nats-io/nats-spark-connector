@@ -177,7 +177,7 @@ class NatsSubBatchMgr {
 
 case class NatsMsg(val subject:String, val dateTime:String, val content:Array[Byte], val headers:Option[Map[String, List[String]]], val jsMetaData:NatsJetStreamMetaData) {
   override def toString():String = {
-    s"""{"subject": "${subject}", "Datetime": "${dateTime}", "payload": "${UTF8String.fromBytes(content)}", "headers": ${headersToJson()}, "js-metadata": ${jSMetaDataToJson()}}"""
+    s"""{"subject": "${subject}", "Datetime": "${dateTime}", "payload": "${new String(content, StandardCharsets.UTF_8)}", "headers": ${headersToJson()}, "js-metadata": ${jSMetaDataToJson()}}"""
   }
 
   def headersToJson():String = {
