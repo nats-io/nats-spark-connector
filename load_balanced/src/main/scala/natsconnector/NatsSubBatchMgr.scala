@@ -200,8 +200,8 @@ case class NatsMsg(val subject:String, val dateTime:String, val content:Array[By
 class Batcher() extends Runnable {
   var buffer:ListBuffer[Message] = ListBuffer.empty[Message]
   val natsSubscriber = new NatsSubscriber()
-  var doRun = true
-  var semaphore = false
+  @volatile var doRun = true
+  @volatile var semaphore = false
 
   override def run(): Unit = {
     this.doRun = true
