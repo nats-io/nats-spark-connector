@@ -1,5 +1,7 @@
 package org.apache.spark.sql.nats
 
+import org.apache.spark.internal.Logging
+
 import java.util.Locale
 import scala.concurrent.duration._
 
@@ -14,21 +16,17 @@ final case class ConsumerConfig(
 final case class SubscriptionConfig(
     streamName: String,
     createConsumer: Boolean,
-    consumerConfig: ConsumerConfig,
-    batcherConfig: BatcherConfig)
-final case class BatcherConfig(
-    initialDelay: FiniteDuration,
-    frequencySecs: FiniteDuration,
-    pullBatchSize: Int,
-    pullWaitTime: FiniteDuration
-)
+    consumerConfig: ConsumerConfig)
+
 final case class NatsSourceConfig(
     jetStreamConfig: JetStreamConfig,
-    subscriptionConfig: SubscriptionConfig
+    subscriptionConfig: SubscriptionConfig,
+    batchSize: Int,
+    maxWait: FiniteDuration
 )
 
 // TODO(mrosti): cats.Validated or PureConfig pls
-object NatsSourceConfig {
+object NatsSourceConfig extends Logging {
   private def required(config: Map[String, String])(key: String): String =
     config.getOrElse(key, throw new IllegalArgumentException(s"Please specify '$key'"))
   private def default(config: Map[String, String])(key: String, default: String): String =
@@ -38,12 +36,12 @@ object NatsSourceConfig {
     def requiredKey(key: String): String = required(config)(key)
     def defaultKey(key: String, dflt: String): String = default(config)(key, dflt)
 
-    // JetStream configuration
+    // Connection configuration
     val host = requiredKey(SourceJSHostOption)
     val port = requiredKey(SourceJSPortOption).toInt
     val credFile = requiredKey(SourceJSCredentialFileOption)
 
-    // Subscription Config
+    // Stream Config
     val streamName = requiredKey(SourcePullSubscriptionNameOption)
     val durableName = requiredKey(SourcePullSubscriptionDurableOption)
 
@@ -57,19 +55,20 @@ object NatsSourceConfig {
       defaultKey(SourceConsumerFilterSubjectsOption, "").split(",")
 
     // Read batch options
-    val initialDelay = defaultKey(SourceBatcherInitialDelayOption, "60").toInt.seconds
-    val frequencySecs = defaultKey(SourceBatcherFrequencySecsOption, "30").toInt.seconds
-    val pullBatchSize = defaultKey(SourcePullBatchSizeOption, "100").toInt
-    val pullWaitTime = defaultKey(SourcePullWaitTimeOption, "60").toInt.seconds
+    val batchSize = defaultKey(SourcePullBatchSizeOption, "1000").toInt
+    val maxWait = defaultKey(SourcePullWaitTimeOption, "1").toInt.seconds
 
-    NatsSourceConfig(
+    val conf = NatsSourceConfig(
       JetStreamConfig(host, port, credFile),
       SubscriptionConfig(
         streamName,
         createConsumer,
-        ConsumerConfig(msgAckTime, maxBatch, maxAckPending, filterSubjects, durableName),
-        BatcherConfig(initialDelay, frequencySecs, pullBatchSize, pullWaitTime)
-      )
+        ConsumerConfig(msgAckTime, maxBatch, maxAckPending, filterSubjects, durableName)
+      ),
+      batchSize,
+      maxWait
     )
+    logInfo(s"$conf")
+    conf
   }
 }

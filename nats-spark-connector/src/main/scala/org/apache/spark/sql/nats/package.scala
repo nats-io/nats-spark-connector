@@ -19,8 +19,6 @@ package object nats {
   val SourceConsumerFilterSubjectsOption = "nats.stream.subjects"
 
   // Pull batcher config
-  val SourceBatcherInitialDelayOption = "nats.pull.batcher.initial.delay"
-  val SourceBatcherFrequencySecsOption = "nats.pull.batcher.frequency.secs"
   val SourcePullBatchSizeOption = "nats.pull.batch.size"
   val SourcePullWaitTimeOption = "nats.pull.wait.time"
 

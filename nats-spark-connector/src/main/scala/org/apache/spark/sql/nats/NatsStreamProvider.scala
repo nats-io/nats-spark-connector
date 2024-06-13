@@ -1,10 +1,10 @@
 package org.apache.spark.sql.nats
 
-import io.nats.client.Nats
-import io.nats.client.Options
+import io.nats.client.api.ConsumerConfiguration
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.execution.streaming.Source
+import org.apache.spark.sql.nats.NatsConnection.withConnection
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.sources.StreamSinkProvider
 import org.apache.spark.sql.sources.StreamSourceProvider
@@ -13,8 +13,7 @@ import org.apache.spark.sql.types.StructType
 
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.{Duration => JDuration}
-import scala.concurrent.duration.DurationInt
+import scala.collection.JavaConverters._
 
 class NatsStreamProvider
     extends DataSourceRegister
@@ -36,29 +35,35 @@ class NatsStreamProvider
       providerName: String,
       parameters: Map[String, String]): Source = {
     val config = NatsSourceConfig(parameters)
-    val auth = Nats.credentials(config.jetStreamConfig.credentialsFile)
-    val options = new Options.Builder()
-      .server(s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}")
-      .authHandler(auth)
-      .reconnectWait(JDuration.ofSeconds(1.seconds.toSeconds))
-      .verbose()
-      .build()
-    val connection = Nats.connect(options)
+    val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
+    val connectionConfig = NatsConnectionConfig(
+      authFileBytes,
+      s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}")
 
-    val natsSubscriber = NatsSubscriber(
-      connection,
-      config.subscriptionConfig
+    if (config.subscriptionConfig.createConsumer) {
+      val consumerConfiguration = ConsumerConfiguration
+        .builder()
+        .durable(config.subscriptionConfig.consumerConfig.durableName)
+        .ackWait(config.subscriptionConfig.consumerConfig.msgAckTime.toMillis)
+        .maxAckPending(config.subscriptionConfig.consumerConfig.maxAckPending)
+        .maxBatch(config.subscriptionConfig.consumerConfig.maxBatch.toLong)
+        .filterSubjects(config.subscriptionConfig.consumerConfig.filterSubjects.asJava)
+        .build()
+      withConnection(connectionConfig)(
+        _.jetStreamManagement()
+          .addOrUpdateConsumer(config.subscriptionConfig.streamName, consumerConfiguration))
+
+    }
+
+    NatsSource(
+      sqlContext,
+      NatsSourceParams(
+        connectionConfig,
+        config.subscriptionConfig.streamName,
+        config.subscriptionConfig.consumerConfig.durableName,
+        config.batchSize,
+        config.maxWait)
     )
-    val _ = natsSubscriber.pull
-
-    val natsBatchManager = NatsBatchManager(
-      natsSubscriber,
-      config.subscriptionConfig.batcherConfig
-    )
-
-    val source = NatsSource(sqlContext, natsBatchManager)
-    source.start()
-    source
   }
 
   override def createSink(
@@ -69,8 +74,9 @@ class NatsStreamProvider
     val config = NatsSinkConfig(parameters)
     val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
     val publisherConfig = NatsPublisherConfig(
-      authFileBytes,
-      s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}",
+      NatsConnectionConfig(
+        authFileBytes,
+        s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}"),
       config.stream)
     NatsSink(publisherConfig)
   }

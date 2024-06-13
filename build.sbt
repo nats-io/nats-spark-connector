@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / version := "2.0.2-SNAPSHOT"
+ThisBuild / version := "2.1.3-SNAPSHOT"
 
 name := "nats-spark-connector"
 
@@ -21,15 +21,16 @@ ThisBuild / semanticdbVersion := scalafixSemanticdb.revision // only required fo
 // TODO(@Marcus-Rosti): we HAVE to deploy to maven, I just don't know exactly how
 publishTo := None
 
-
 val sparkVersion = "3.5.1"
-val natsVersion = "2.17.6"
-val catsVersion = "2.10.0"
-
+val natsVersion = "2.19.0"
 val munitVersion = "0.7.29"
 
 // TODO(@Marcus-Rosti): build the other connector styles here
-lazy val root = (project in file(".")).aggregate(`nats-spark-connector`)
+lazy val root = (project in file("."))
+  .aggregate(`nats-spark-connector`)
+  .settings(
+    publish := false
+  )
 
 lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).settings(
   name := "nats-spark-connector",
@@ -43,6 +44,7 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
   // TODO(@Marcus-Rosti): fix all of these
   Compile / compile / wartremoverErrors ++= Warts.allBut(
       Wart.Null,
+      Wart.Equals,
       Wart.NonUnitStatements,
       Wart.Throw,
       Wart.Overloading,
@@ -50,9 +52,6 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
       Wart.StringPlusAny
     ),
     libraryDependencies ++= Seq(
-    // TODO(@Marcus-Rosti): This probably isn't required... could remove / refactor
-    "org.typelevel" %% "cats-core" % catsVersion,
-    "org.typelevel" %% "cats-kernel" % catsVersion,
     // TODO(@Marcus-Rosti): Maybe we shouldn't require this, more of a BYO-jnats?
     "io.nats" % "jnats" % natsVersion,
   ) ++ Seq(

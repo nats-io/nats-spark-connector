@@ -17,8 +17,6 @@ class NatSourceConfigTest extends FunSuite {
       "nats.pull.consumer.max.ack.pending" -> "7",
       "nats.pull.consumer.max.batch" -> "2",
       "nats.stream.subjects" -> "a,b",
-      "nats.pull.batcher.initial.delay" -> "3",
-      "nats.pull.batcher.frequency.secs" -> "4",
       "nats.pull.batch.size" -> "5",
       "nats.pull.wait.time" -> "6"
     )
@@ -34,15 +32,11 @@ class NatSourceConfigTest extends FunSuite {
           7,
           Seq("a", "b"),
           "durable"
-        ),
-        BatcherConfig(
-          3.seconds,
-          4.seconds,
-          5,
-          6.seconds
-        )
-      )
+        )),
+      5,
+      6.seconds
     )
+
     assertEquals(NatsSourceConfig(params), expectedConfig)
   }
 }

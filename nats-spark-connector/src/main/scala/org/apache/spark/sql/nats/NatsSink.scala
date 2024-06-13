@@ -1,20 +1,19 @@
 package org.apache.spark.sql.nats
 
 import io.nats.client.Message
-import io.nats.client.Nats
 import io.nats.client.PublishOptions
 import io.nats.client.impl.Headers
 import io.nats.client.impl.NatsMessage
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.streaming.Sink
+import org.apache.spark.sql.nats.NatsConnection.withConnection
 import org.apache.spark.sql.types._
 
 import scala.collection.JavaConverters._
-import scala.util.Try
 
 @SuppressWarnings(Array("org.wartremover.warts.ArrayEquals"))
-final case class NatsPublisherConfig(secretBytes: Array[Byte], url: String, stream: String)
+final case class NatsPublisherConfig(natsConnectionConfig: NatsConnectionConfig, stream: String)
 
 object NatsSink {
   val schema: StructType = StructType(
@@ -53,25 +52,23 @@ object MessageBuilder {
 
 class NatsSink(natsPublisherConfig: NatsPublisherConfig) extends Sink with Logging {
 
-  private def publish(
-      natsPublisherConfig: NatsPublisherConfig): Iterator[NatsMessageRow] => Unit =
-    (iterator: Iterator[NatsMessageRow]) => {
-      val auth = Nats.staticCredentials(natsPublisherConfig.secretBytes)
-      val connection = Nats.connect(natsPublisherConfig.url, auth)
-      val jetStream = connection.jetStream()
-      val publishOptions = PublishOptions.builder().stream(natsPublisherConfig.stream).build()
-      iterator.map(MessageBuilder(_)).foreach(jetStream.publish(_, publishOptions))
-      connection.close()
-    }
-
   override def addBatch(batchId: Long, data: DataFrame): Unit = {
     import data.sparkSession.implicits._
     logInfo(s"addBatch $batchId")
+    val connectionConfig = natsPublisherConfig.natsConnectionConfig
+    val stream = natsPublisherConfig.stream
     data
       .sparkSession
       .internalCreateDataFrame(data.queryExecution.toRdd, data.schema)
       .to(NatsSink.schema)
       .as[NatsMessageRow]
-      .foreachPartition(publish(natsPublisherConfig))
+      .foreachPartition((iterator: Iterator[NatsMessageRow]) => {
+        withConnection(connectionConfig)(connection => {
+          val jetStream = connection.jetStream()
+          val publishOptions =
+            PublishOptions.builder().stream(stream).build()
+          iterator.map(MessageBuilder(_)).foreach(jetStream.publish(_, publishOptions))
+        })
+      })
   }
 }
