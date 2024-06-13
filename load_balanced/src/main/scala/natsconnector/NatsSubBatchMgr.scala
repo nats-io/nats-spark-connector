@@ -216,7 +216,6 @@ class Batcher() extends Runnable {
     this.doRun = false
     while(this.semaphore) {Thread.sleep(10)}
     val batch = this.buffer.toList
-    this.buffer = ListBuffer.empty[Message]
     batch
   }
 

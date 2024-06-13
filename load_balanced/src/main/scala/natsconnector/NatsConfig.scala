@@ -97,6 +97,7 @@ class NatsConfig(isSource: Boolean) {
 
   var numListeners = 1
 
+  var idleTimeout: Option[Duration] = None // if no messages received for this time do not try to get any more messages from the consumer
   // JetStream context
   var js: Option[JetStream] = None
 
@@ -291,6 +292,13 @@ class NatsConfig(isSource: Boolean) {
       case e: NoSuchElementException =>
     }
 
+    try {
+      val param = parameters("nats.idle-timeout.minutes")
+      this.idleTimeout = Some(Duration.ofMinutes(param.toLong))
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
     this.server = Some(s"nats://${this.host}:${this.port}")
     this.options = Some(createConnectionOptions())
 
@@ -329,6 +337,7 @@ class NatsConfig(isSource: Boolean) {
           + s"truststorePath = ${this.truststorePath}\n"
           + s"truststorePassword = ${this.truststorePassword}\n"
           + s"tlsAlgorithm = ${this.tlsAlgorithm}\n"
+          + s"idleTimeout = ${this.idleTimeout}\n"
           + s"[Connection] options = ${this.options}\n"
           + s"[Nats connection] nc = ${this.nc}\n"
           + s"[JetStream context] js= ${this.js}\n"

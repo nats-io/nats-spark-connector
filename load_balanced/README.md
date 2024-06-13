@@ -196,6 +196,10 @@ Possible options are:
 - "nats.ssl.context.factory.class"
   Can be used to specify the name of your own SSL context factory class to use for the NATS connection.
 
+- "nats.idle-timeout.minutes"
+  If specified, the connector stops consuming new messages after being idle (no new messages delivered)
+  for that number of minutes.
+
 ### Spark Streaming Sink Options
 An example Scala sink configuration for the NATS connector follows:
 ```

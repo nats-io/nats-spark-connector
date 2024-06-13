@@ -34,6 +34,8 @@ class NatsStreamingSource(sqlContext: SQLContext,
     private var currentOffset: NatsOffset = new NatsOffset(None)
     private var batchMgr:NatsSubBatchMgr = new NatsSubBatchMgr()
     private var payloadCompression:Option[String] = None
+    private var lastDeliveredBatchTimestamp:ZonedDateTime = ZonedDateTime.now()
+    private var idleTimeout:Option[Duration] = NatsConfigSource.config.idleTimeout
 
     try {
         val compression = parameters("nats.storage.payload-compression")
@@ -41,6 +43,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
     } catch {
         case e: NoSuchElementException =>
     }
+
     override def stop(): Unit = {
         val nc = NatsConfigSource.config.nc
         try {
@@ -64,8 +67,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
             }
             this.currentOffset = NatsOffset(Some(NatsBatchInfo(offsetList.toList)))
             None
-        }
-        else {
+        } else {
             this.logger.debug(
                 "Current offset batch list:\n"
                 + s"${offsetList}"
@@ -83,7 +85,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
         val natsOffset:NatsOffset = (NatsOffset.convert(end)).get
         val batchInfo:NatsBatchInfo = natsOffset.offset.get
         val batchIdList:List[String] = batchInfo.batchIdList
-        var natsBatch:MutableList[NatsMsg] = MutableList.empty[NatsMsg]
+        val natsBatch:MutableList[NatsMsg] = MutableList.empty[NatsMsg]
 
         for(batchId <- batchIdList) {
             natsBatch ++= getBatchMgr().freezeAndGetBatch(batchId)
@@ -99,15 +101,22 @@ class NatsStreamingSource(sqlContext: SQLContext,
         val df = this.sqlContext.sparkSession.internalCreateDataFrame(
                                     sqlContext.sparkSession.sparkContext.parallelize(rowSeq),
                                     this.schema, isStreaming = true)
-                                    
-        // We have frozen the current batch and while Spark is processing it we start a new batch in the background
-        val numListeners = NatsConfigSource.config.numListeners
-        val offsetList: MutableList[String] = MutableList()
-        for(listener <- 0 until numListeners) {
-            val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
-            offsetList += batchId
+
+        if (rowSeq.length != 0) {
+            this.lastDeliveredBatchTimestamp = ZonedDateTime.now()
         }
-        this.currentOffset = NatsOffset(Some(NatsBatchInfo(offsetList.toList)))
+
+        // We have frozen the current batch and while Spark is processing it we start a new batch in the background
+        // but only if the idle timeout has not been exceeded
+        if (this.idleTimeout.isEmpty || (idleTimeout.isDefined && Duration.between(this.lastDeliveredBatchTimestamp, ZonedDateTime.now()).compareTo(NatsConfigSource.config.idleTimeout.get) < 0)) {
+            val numListeners = NatsConfigSource.config.numListeners
+            val offsetList: MutableList[String] = MutableList()
+            for (listener <- 0 until numListeners) {
+                val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
+                offsetList += batchId
+            }
+            this.currentOffset = NatsOffset(Some(NatsBatchInfo(offsetList.toList)))
+        }
 
         df
     }
