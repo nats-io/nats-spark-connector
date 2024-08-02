@@ -9,7 +9,7 @@ val slf4jVersion = "2.0.3"
 val log4jVersion = "2.23.1"
 val jacksonVersion = "2.17.0"
 val json4sVersion = "4.0.7"
-val natsVersion = "2.17.4"
+val natsVersion = "2.20.0"
 
 resolvers ++= Seq(
   "MavenRepository2" at "https://mvnrepository.com",
