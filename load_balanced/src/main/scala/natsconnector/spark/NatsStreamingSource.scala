@@ -36,6 +36,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
     private var payloadCompression:Option[String] = None
     private var lastDeliveredBatchTimestamp:ZonedDateTime = ZonedDateTime.now()
     private var idleTimeout:Option[Duration] = NatsConfigSource.config.idleTimeout
+    private var ackNone = NatsConfigSource.config.ackNone
 
     try {
         val compression = parameters("nats.storage.payload-compression")
@@ -121,11 +122,13 @@ class NatsStreamingSource(sqlContext: SQLContext,
         df
     }
     override def commit(end: Offset):Unit = {
-        val natsOffset:NatsOffset = NatsOffset.convert(end).get
-        val batchInfo:NatsBatchInfo = natsOffset.offset.get
-        val batchIdList:List[String] = batchInfo.batchIdList
-        for(batchId <- batchIdList) {
-            getBatchMgr().commitBatch(batchId)
+        if (!ackNone) {
+            val natsOffset: NatsOffset = NatsOffset.convert(end).get
+            val batchInfo: NatsBatchInfo = natsOffset.offset.get
+            val batchIdList: List[String] = batchInfo.batchIdList
+            for (batchId <- batchIdList) {
+                getBatchMgr().commitBatch(batchId)
+            }
         }
     }
     
