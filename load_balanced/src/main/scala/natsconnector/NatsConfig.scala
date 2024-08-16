@@ -53,6 +53,7 @@ class NatsConfig(isSource: Boolean) {
   var connectionTimeout = Duration.ofSeconds(20)
   var pingInterval = Duration.ofSeconds(10)
   var reconnectWait = Duration.ofSeconds(20)
+  var outQueueMaxMessages = 10000 // max number of messages in the nats.java outgoing queue (configurable)
   var messageReceiveWaitTime = Duration.ofMillis(50)
   var flushWaitTime = Duration.ofMillis(
     0
@@ -77,6 +78,7 @@ class NatsConfig(isSource: Boolean) {
   var msgAckWaitTime =
     Duration.ofSeconds(60) // time server expects ack back after sending msg,
   // should be longer than max time expected to process msg. - configurable
+  var ackNone = false // configurable
   var jsAPIPrefix: Option[String] = None // configurable
   var userName: Option[String] = None // configurable
   var userPassword: Option[String] = None // configurable
@@ -140,6 +142,12 @@ class NatsConfig(isSource: Boolean) {
     }
 
     try {
+      this.ackNone = parameters("nats.ack.none").toBoolean
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
       this.numListeners = parameters("nats.num.listeners").toInt
     } catch {
       case e: NoSuchElementException =>
@@ -166,6 +174,12 @@ class NatsConfig(isSource: Boolean) {
 
     try {
       this.userPassword = Some(parameters("nats.connection.user.password"))
+    } catch {
+      case e: NoSuchElementException =>
+    }
+
+    try {
+      this.outQueueMaxMessages = parameters("nats.connection.outgoingqueue.maxmessages").toInt
     } catch {
       case e: NoSuchElementException =>
     }
@@ -315,6 +329,8 @@ class NatsConfig(isSource: Boolean) {
           + s"connectionTimeout = ${this.connectionTimeout}\n"
           + s"pingInterval = ${this.pingInterval}\n"
           + s"reconnectWait = ${this.reconnectWait}\n"
+          + s"outQueueMaxMessages = ${this.outQueueMaxMessages}\n"
+          + s"ackNone = ${this.ackNone}\n"
           + s"messageReceiveWaitTime = ${this.messageReceiveWaitTime}\n"
           + s"flushWaitTime = ${this.flushWaitTime}\n"
           + s"msgFetchBatchSize = ${this.msgFetchBatchSize}\n"
@@ -415,11 +431,12 @@ class NatsConfig(isSource: Boolean) {
     }
 
     if (this.defineConsumer) {
+      val ackPolicy = if (this.ackNone) AckPolicy.None else AckPolicy.Explicit
       val subjectArray = this.streamSubjects.get.replace(" ", "").split(",")
       val configBuilder = ConsumerConfiguration
         .builder()
         .ackWait(this.msgAckWaitTime)
-        .ackPolicy(this.ackPolicy)
+        .ackPolicy(ackPolicy)
         .filterSubjects(subjectArray.toList.asJava)
         .deliverPolicy(this.deliverPolicy)
       if (this.durable.isDefined)
@@ -489,6 +506,7 @@ class NatsConfig(isSource: Boolean) {
       .reconnectWait(this.reconnectWait)
       .errorListener(el)
       .connectionListener(cl)
+      .maxMessagesInOutgoingQueue(outQueueMaxMessages)
 
     if (!allowReconnect) {
       builder = builder.noReconnect()

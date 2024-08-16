@@ -200,6 +200,12 @@ Possible options are:
   If specified, the connector stops consuming new messages after being idle (no new messages delivered)
   for that number of minutes.
 
+- "nats.ack.none"
+  Do not use explicit acks for the JetStream consumer and do not JetStream ack the messages. Default is false.
+
+- "nats.connection.outgoingqueue.maxmessages"
+  Adjust the outgoing message queue max size for the NATS connection. Default is 10000.
+
 ### Spark Streaming Sink Options
 An example Scala sink configuration for the NATS connector follows:
 ```
