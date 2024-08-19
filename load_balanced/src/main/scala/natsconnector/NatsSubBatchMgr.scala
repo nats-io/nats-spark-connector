@@ -136,13 +136,13 @@ class NatsSubBatchMgr {
 
       NatsMsg(msg.getSubject(),
         ZonedDateTime.now().format(df),
-        msg.getData(), getHeaders(msg), msg.metaData())
+        msg.getData(), getHeaders(msg), Some(msg.metaData()))
     }
 
     def compressed(msg:Message):NatsMsg = {
       NatsMsg(msg.getSubject(),
         ZonedDateTime.now().format(df),
-        decompress(msg.getData()), getHeaders(msg), msg.metaData())
+        decompress(msg.getData()), getHeaders(msg), Some(msg.metaData()))
     }
 
     if (this.payloadCompression.isDefined) {
@@ -175,7 +175,9 @@ class NatsSubBatchMgr {
 
 }
 
-case class NatsMsg(val subject:String, val dateTime:String, val content:Array[Byte], val headers:Option[Map[String, List[String]]], val jsMetaData:NatsJetStreamMetaData) {
+case class CoreNatsMsg(val subject:String, val dateTime:String, val content:Array[Byte], val headers:Option[Map[String, List[String]]])
+
+case class NatsMsg(val subject:String, val dateTime:String, val content:Array[Byte], val headers:Option[Map[String, List[String]]], val jsMetaData:Option[NatsJetStreamMetaData]) {
   override def toString():String = {
     s"""{"subject": "${subject}", "Datetime": "${dateTime}", "payload": "${new String(content, StandardCharsets.UTF_8)}", "headers": ${headersToJson()}, "js-metadata": ${jSMetaDataToJson()}}"""
   }
@@ -189,8 +191,8 @@ case class NatsMsg(val subject:String, val dateTime:String, val content:Array[By
   }
 
   def jSMetaDataToJson():String = {
-    if (jsMetaData != null) {
-      s"""{"jsMetaData": {"stream" : "${jsMetaData.getStream}", "streamSeq" :  ${jsMetaData.streamSequence()}, "consumerSeq" : ${jsMetaData.consumerSequence()}, "delivered" : ${jsMetaData.deliveredCount()}, "pending" : ${jsMetaData.pendingCount()}, "timestamp" : "${jsMetaData.timestamp()}"}}"""
+    if (jsMetaData != null && jsMetaData.isDefined) {
+      s"""{"jsMetaData": {"stream" : "${jsMetaData.get.getStream}", "streamSeq" :  ${jsMetaData.get.streamSequence()}, "consumerSeq" : ${jsMetaData.get.consumerSequence()}, "delivered" : ${jsMetaData.get.deliveredCount()}, "pending" : ${jsMetaData.get.pendingCount()}, "timestamp" : "${jsMetaData.get.timestamp()}"}}"""
     } else {
       ""
     }
