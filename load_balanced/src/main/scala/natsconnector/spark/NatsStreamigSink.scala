@@ -1,6 +1,6 @@
 package natsconnector.spark
 
-import natsconnector.NatsMsg
+import natsconnector.{CoreNatsMsg, NatsMsg}
 //import natsconnector.NatsBatchPublisher
 import natsconnector.NatsConfigSink
 import natsconnector.NatsConfig
@@ -50,9 +50,9 @@ class NatsStreamingSink(sqlContext: SQLContext,
     val df = data.sparkSession.createDataFrame(rdd, data.schema)
 
     val natsMsgDataset = df.map(row =>
-                     new NatsMsg(row.getString(0), row.getString(1), row.getString(2).getBytes, None, null))
+                     new CoreNatsMsg(row.getString(0), row.getString(1), row.getString(2).getBytes(), None))
 
-    val natsMsgs: Seq[NatsMsg] = natsMsgDataset.collect().toSeq
+    val natsMsgs: Seq[CoreNatsMsg] = natsMsgDataset.collect().toSeq
 
     natsMsgs.foreach(msg => sendNatsMsg(msg.subject, msg.dateTime, msg.content))
 
