@@ -1,9 +1,10 @@
-# NATS-SPARK-CONNECTOR
+# NATS-SPARK-CONNECTORS
 
-The following are all the current flavors of the nats-spark-connector, each flavor
-has its own directory structure. 
+This repository contains multiple independent kinds of nats-spark-connectors, each flavor
+having its own directory structure, with its own README and SBT build files.
 
-At this point, the partitioned connector is not being actively developed anymore. It is now considered legacy and included only for educational purposes only. It will be removed entirely in the future.
+- **V2**
+This is currently the newest connector, and the one to now use by default. It starts with version 2.0 to avoid any ambiguity with the 'balanced' connector which only has versions 1.x.
 
 - **balanced:**
   In this scenario, NATS utilizes a single JetStream partition, using a durable
@@ -13,11 +14,10 @@ At this point, the partitioned connector is not being actively developed anymore
   (FT). Spark simply acknowledges each message during a micro-batch 'commit', and
   resends a message if an ack is not received within a pre-set timeframe.
 
-This flavor is contained in the subdirectory **'balanced'**, which
-has its own README.md containing further information.
+- **archived**
 
+- At this point, the partitioned connector is now considered legacy and included only for educational purposes only. It may be removed entirely in the future.
 
-**LEGACY: USE BALANCED INSTEAD** 
 - **partitioned:**
 In this scenario, NATS utilizes a number of JetStream partitions named
 *<partition_prefix>-0*, *<partition_prefix>-1*, ..., *<partition_prefix>-N*, each
@@ -27,9 +27,3 @@ to a single streaming micro-batch Dataframe at each Spark "pull". Current offset
 for each partition is kept in Spark for the purpose of fault tolerance (FT). There
 also is an option to always start from each partition's first offset during a Spark
 restart, instead of the FT configuration.
-
-This flavor is contained in the subdirectory **'partitioned'**, which has its
-own README.md containing further information.
-
-- **filtered:**
-This is a future scenario TBD.
