@@ -18,11 +18,15 @@ class NatSourceConfigTest extends FunSuite {
       "nats.pull.consumer.max.batch" -> "2",
       "nats.stream.subjects" -> "a,b",
       "nats.pull.batch.size" -> "5",
-      "nats.pull.wait.time" -> "6"
+      "nats.pull.wait.time" -> "6",
+      "nats.tls.algorithm" -> "algo",
+      "nats.trust.store.path" -> "truststore",
+      "nats.key.store.path" -> "keystore",
     )
     val createConsumer = false
+
     val expectedConfig = NatsSourceConfig(
-      JetStreamConfig("localhost", 4222, "/tmp/secret.txt"),
+      JetStreamConfig("localhost", 4222, "/tmp/secret.txt", Some("algo"), Some("truststore"), None, Some("keystore"), None, None, None),
       SubscriptionConfig(
         "stream",
         createConsumer,

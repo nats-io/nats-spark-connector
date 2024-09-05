@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import java.util.Locale
 import scala.concurrent.duration._
 
-final case class JetStreamConfig(host: String, port: Int, credentialsFile: String)
+final case class JetStreamConfig(host: String, port: Int, credentialsFile: String, tlsAlgorithm: Option[String], truststorePath: Option[String], truststorePassword: Option[Array[Char]], keystorePath: Option[String], keystorePassword: Option[Array[Char]], sslContextFactoryClass: Option[String], jsApiPrefix: Option[String])
 final case class ConsumerConfig(
     msgAckTime: FiniteDuration,
     maxBatch: Int,
@@ -40,6 +40,13 @@ object NatsSourceConfig extends Logging {
     val host = requiredKey(SourceJSHostOption)
     val port = requiredKey(SourceJSPortOption).toInt
     val credFile = requiredKey(SourceJSCredentialFileOption)
+    val tlsAlgorithm = config.get(SourceTlsAlgorithmOption)
+    val truststorePath = config.get(SourceTrustStorePathOption)
+    val truststorePassword = config.get(SourceTrustStorePasswordOption).map(_.toCharArray)
+    val keystorePath = config.get(SourceKeyStorePathOption)
+    val keystorePassword = config.get(SourceKeyStorePasswordOption).map(_.toCharArray)
+    val sslContextFactoryClass = config.get(SourceSslContextFactoryOption)
+    val jsApiPrefix = config.get(SourceJSAPIPrefixOption)
 
     // Stream Config
     val streamName = requiredKey(SourcePullSubscriptionNameOption)
@@ -59,7 +66,7 @@ object NatsSourceConfig extends Logging {
     val maxWait = defaultKey(SourcePullWaitTimeOption, "1").toInt.seconds
 
     val conf = NatsSourceConfig(
-      JetStreamConfig(host, port, credFile),
+      JetStreamConfig(host, port, credFile, tlsAlgorithm, truststorePath, truststorePassword, keystorePath, keystorePassword, sslContextFactoryClass, jsApiPrefix),
       SubscriptionConfig(
         streamName,
         createConsumer,

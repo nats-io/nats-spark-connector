@@ -8,7 +8,7 @@ import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.nats.NatsConnection.withConnection
+import org.apache.spark.sql.nats.NatsConnection.{withConnection, withJS}
 import org.apache.spark.sql.nats.NatsRDD._
 
 import scala.collection.JavaConverters._
@@ -40,20 +40,18 @@ class NatsRDD(sc: SparkContext, natsSourceParams: NatsSourceParams)
 
   /**
    * Fetch every nats batch -- since we have to use an ephemeral nats connection, we fetch and
-   * then return an iterator instead of using {@link
-   * io.nats.client.JetStreamSubscription#iterate(int, java.time.Duration)}
+   * then return an iterator instead of using {@link io.nats.client.JetStreamSubscription#iterate(int, java.time.Duration)}
    */
   override def compute(split: Partition, context: TaskContext): Iterator[NatsMessageMeta] = {
     logTrace("compute")
     split match {
       case NatsPartition(idx) => logDebug(s"Fetching $idx")
     }
-    withConnection(natsSourceParams.natsConnectionConfig)(conn => {
+    withJS(natsSourceParams.natsConnectionConfig)(js => {
       logDebug("Starting iterator")
       val pullSubscriptionConf = PullSubscribeOptions
         .fastBind(natsSourceParams.streamName, natsSourceParams.consumerName)
-      conn
-        .jetStream()
+      js
         .subscribe(None.orNull, pullSubscriptionConf)
         .fetch(natsSourceParams.batchSize, natsSourceParams.maxWait.toMillis)
         .iterator()
@@ -65,9 +63,8 @@ class NatsRDD(sc: SparkContext, natsSourceParams: NatsSourceParams)
   // returns a list of ints, that tries to capture every outstanding nats message
   override protected def getPartitions: Array[Partition] = {
     logInfo("getPartitions")
-    withConnection(natsSourceParams.natsConnectionConfig)(conn => {
-      val numPending = conn
-        .jetStream()
+    withJS(natsSourceParams.natsConnectionConfig)(js => {
+      val numPending = js
         .getConsumerContext(natsSourceParams.streamName, natsSourceParams.consumerName)
         .getConsumerInfo
         .getNumPending

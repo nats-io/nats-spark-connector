@@ -2,17 +2,13 @@ package org.apache.spark.sql.nats
 
 import io.nats.client.api.ConsumerConfiguration
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.execution.streaming.Sink
-import org.apache.spark.sql.execution.streaming.Source
-import org.apache.spark.sql.nats.NatsConnection.withConnection
-import org.apache.spark.sql.sources.DataSourceRegister
-import org.apache.spark.sql.sources.StreamSinkProvider
-import org.apache.spark.sql.sources.StreamSourceProvider
+import org.apache.spark.sql.execution.streaming.{Sink, Source}
+import org.apache.spark.sql.nats.NatsConnection.withJSM
+import org.apache.spark.sql.sources.{DataSourceRegister, StreamSinkProvider, StreamSourceProvider}
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 
-import java.nio.file.Files
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 
 class NatsStreamProvider
@@ -38,7 +34,9 @@ class NatsStreamProvider
     val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
     val connectionConfig = NatsConnectionConfig(
       authFileBytes,
-      s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}")
+      s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}",
+      config.jetStreamConfig.tlsAlgorithm, config.jetStreamConfig.truststorePath, config.jetStreamConfig.truststorePassword, config.jetStreamConfig.keystorePath, config.jetStreamConfig.keystorePassword, config.jetStreamConfig.sslContextFactoryClass,
+      config.jetStreamConfig.jsApiPrefix)
 
     if (config.subscriptionConfig.createConsumer) {
       val consumerConfiguration = ConsumerConfiguration
@@ -49,10 +47,8 @@ class NatsStreamProvider
         .maxBatch(config.subscriptionConfig.consumerConfig.maxBatch.toLong)
         .filterSubjects(config.subscriptionConfig.consumerConfig.filterSubjects.asJava)
         .build()
-      withConnection(connectionConfig)(
-        _.jetStreamManagement()
-          .addOrUpdateConsumer(config.subscriptionConfig.streamName, consumerConfiguration))
-
+      withJSM(connectionConfig)(jsm =>
+        jsm.addOrUpdateConsumer(config.subscriptionConfig.streamName, consumerConfiguration))
     }
 
     NatsSource(
@@ -76,7 +72,7 @@ class NatsStreamProvider
     val publisherConfig = NatsPublisherConfig(
       NatsConnectionConfig(
         authFileBytes,
-        s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}"),
+        s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}", config.jetStreamConfig.tlsAlgorithm, config.jetStreamConfig.truststorePath, config.jetStreamConfig.truststorePassword, config.jetStreamConfig.keystorePath, config.jetStreamConfig.keystorePassword, config.jetStreamConfig.sslContextFactoryClass, config.jetStreamConfig.jsApiPrefix),
       config.stream)
     NatsSink(publisherConfig)
   }

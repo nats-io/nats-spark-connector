@@ -24,6 +24,26 @@ val spark = SparkSession
 ```
 For more information, please refer to the Spark documentation.
 
+## NATS common connectivity options
+Both sources and sinks have a common set of options governing how the connection to NATS and JS is established. Possible options are:
+#### Required
+- "nats.host"
+  The host part of a NATS connection URL (e.g. "localhost")
+- "nats.port"
+   The TCP port part of a NATS connection URL (e.g. 4222)
+- "nats.credential.file"
+  The path to NATS credentials (.creds) file
+#### Optional
+- "nats.js.api.prefix"
+  The JetStream API prefix to use when accessing Streams from other JS domains
+##### TLS
+- "nats.tls.algorithm" (the "NATS_TLS_ALGO" env variable takes precedence)
+- "nats.trust.store.path" (the "NATS_TLS_TRUST_STORE" env variable takes precedence)
+- "nats.trust.store.password" (the "NATS_TLS_TRUST_STORE_PASSWORD" env variable takes precedence)
+- "nats.key.store.path" (the "NATS_TLS_KEY_STORE" env variable takes precedence)
+- "nats.key.store.password" (the "NATS_TLS_KEY_STORE_PASSWORD" env variable takes precedence)
+- "nats.ssl.context.factory.class"
+  Can be used to specify the name of your own SSL context factory class to use for the NATS connection.
 
 ### Spark Streaming Source Options
 An example Scala source configuration for the NATS connector follows:

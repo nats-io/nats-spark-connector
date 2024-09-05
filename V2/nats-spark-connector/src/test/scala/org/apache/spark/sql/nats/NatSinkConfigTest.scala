@@ -14,7 +14,14 @@ class NatSinkConfigTest extends FunSuite {
       PublisherJetStreamConfig(
         "localhost",
         4222,
-        "/tmp/secret.txt"
+        "/tmp/secret.txt",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None
       ),
       "subject"
     )

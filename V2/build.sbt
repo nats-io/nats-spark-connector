@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / version := "2.1.3-SNAPSHOT"
+ThisBuild / version := "2.1.4-SNAPSHOT"
 
 name := "nats-spark-connector"
 
@@ -49,7 +49,8 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
       Wart.Throw,
       Wart.Overloading,
       Wart.Any,
-      Wart.StringPlusAny
+      Wart.StringPlusAny,
+      Wart.AsInstanceOf,
     ),
     libraryDependencies ++= Seq(
     // TODO(@Marcus-Rosti): Maybe we shouldn't require this, more of a BYO-jnats?

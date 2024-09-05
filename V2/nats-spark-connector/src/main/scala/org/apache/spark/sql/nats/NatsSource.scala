@@ -2,13 +2,11 @@ package org.apache.spark.sql.nats
 
 import io.nats.client.Message
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming._
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.nats.NatsConnection.withConnection
+import org.apache.spark.sql.nats.NatsConnection.withJS
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -27,7 +25,7 @@ object MessageToSparkRow {
         _.entrySet()
           .toSet
           .map((me: util.Map.Entry[String, util.List[String]]) =>
-            (me.getKey, me.getValue.asScala.toSeq))
+            (me.getKey, me.getValue.asScala))
           .toMap)
 
     val metadata = message.metaData()
@@ -107,9 +105,8 @@ class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
 
   override def getOffset: Option[Offset] = {
     logInfo("getOffset")
-    val pending = withConnection(natsSourceParams.natsConnectionConfig)(conn => {
-      val consumerInfo = conn
-        .jetStream()
+    val pending = withJS(natsSourceParams.natsConnectionConfig)(js => {
+      val consumerInfo = js
         .getConsumerContext(natsSourceParams.streamName, natsSourceParams.consumerName)
         .getConsumerInfo
       consumerInfo.getNumWaiting + consumerInfo.getNumPending
