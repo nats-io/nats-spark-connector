@@ -8,17 +8,20 @@ class NatSinkConfigTest extends FunSuite {
       "nats.host" -> "localhost",
       "nats.port" -> "4222",
       "nats.credential.file" -> "/tmp/secret.txt",
-      "nats.stream.name" -> "subject"
+      "nats.stream.name" -> "subject",
+      "nats.tls.algorithm" -> "algo",
+      "nats.trust.store.path" -> "truststore",
+      "nats.key.store.path" -> "keystore",
     )
     val expectedConfig = NatsSinkConfig(
       PublisherJetStreamConfig(
         "localhost",
         4222,
         "/tmp/secret.txt",
+        Some("algo"),
+        Some("truststore"),
         None,
-        None,
-        None,
-        None,
+        Some("keystore"),
         None,
         None,
         None
