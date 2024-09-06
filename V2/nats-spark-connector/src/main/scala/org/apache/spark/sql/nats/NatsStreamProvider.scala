@@ -8,7 +8,7 @@ import org.apache.spark.sql.sources.{DataSourceRegister, StreamSinkProvider, Str
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Paths}
 import scala.collection.JavaConverters._
 
 class NatsStreamProvider
@@ -31,7 +31,7 @@ class NatsStreamProvider
       providerName: String,
       parameters: Map[String, String]): Source = {
     val config = NatsSourceConfig(parameters)
-    val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
+    val authFileBytes = Files.readAllBytes(Paths.get(config.jetStreamConfig.credentialsFile))
     val connectionConfig = NatsConnectionConfig(
       authFileBytes,
       s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}",
@@ -68,7 +68,7 @@ class NatsStreamProvider
       partitionColumns: Seq[String],
       outputMode: OutputMode): Sink = {
     val config = NatsSinkConfig(parameters)
-    val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
+    val authFileBytes = Files.readAllBytes(Paths.get(config.jetStreamConfig.credentialsFile))
     val publisherConfig = NatsPublisherConfig(
       NatsConnectionConfig(
         authFileBytes,
