@@ -18,7 +18,8 @@ class NatSourceConfigTest extends FunSuite {
       "nats.pull.consumer.max.batch" -> "2",
       "nats.stream.subjects" -> "a,b",
       "nats.pull.batch.size" -> "5",
-      "nats.pull.wait.time" -> "6"
+      "nats.pull.wait.time" -> "6",
+      "nats.pull.subscription.payload.compression" -> "zlib"
     )
     val createConsumer = false
     val expectedConfig = NatsSourceConfig(
@@ -32,7 +33,8 @@ class NatSourceConfigTest extends FunSuite {
           7,
           Seq("a", "b"),
           "durable"
-        )),
+        ),
+        "zlib"),
       5,
       6.seconds
     )

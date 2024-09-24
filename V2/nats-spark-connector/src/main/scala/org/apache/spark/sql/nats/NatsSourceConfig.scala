@@ -16,7 +16,9 @@ final case class ConsumerConfig(
 final case class SubscriptionConfig(
     streamName: String,
     createConsumer: Boolean,
-    consumerConfig: ConsumerConfig)
+    consumerConfig: ConsumerConfig,
+    payloadCompression: String // TODO ask about move to ConsumerConfig????
+)
 
 final case class NatsSourceConfig(
     jetStreamConfig: JetStreamConfig,
@@ -44,6 +46,11 @@ object NatsSourceConfig extends Logging {
     // Stream Config
     val streamName = requiredKey(SourcePullSubscriptionNameOption)
     val durableName = requiredKey(SourcePullSubscriptionDurableOption)
+    val payloadCompression = defaultKey(SourcePullSubscriptionCompressionOption, "none")
+    payloadCompression match {
+      case "none" | "zlib" => () 
+      case _ => println(s"Option passed to '$SourcePullSubscriptionCompressionOption' not recognized. Defaulting to 'none'")
+    }
 
     // Consumer Config
     val createConsumer =
@@ -63,7 +70,8 @@ object NatsSourceConfig extends Logging {
       SubscriptionConfig(
         streamName,
         createConsumer,
-        ConsumerConfig(msgAckTime, maxBatch, maxAckPending, filterSubjects, durableName)
+        ConsumerConfig(msgAckTime, maxBatch, maxAckPending, filterSubjects, durableName),
+        payloadCompression
       ),
       batchSize,
       maxWait

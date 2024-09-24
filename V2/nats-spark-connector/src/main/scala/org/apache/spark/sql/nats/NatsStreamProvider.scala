@@ -62,7 +62,9 @@ class NatsStreamProvider
         config.subscriptionConfig.streamName,
         config.subscriptionConfig.consumerConfig.durableName,
         config.batchSize,
-        config.maxWait)
+        config.maxWait,
+        config.subscriptionConfig.payloadCompression
+      )
     )
   }
 

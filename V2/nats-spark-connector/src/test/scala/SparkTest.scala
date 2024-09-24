@@ -26,6 +26,7 @@ object SparkTest extends App {
     .option("nats.pull.consumer.create", "false")
     .option("nats.pull.batch.size", "changeme")
     .option("nats.pull.wait.time", "changeme")
+    .option("nats.pull.subscription.payload.compression", "zlib")
     .load()
     .withWatermark("timestamp", "1 minute")
     .writeStream
