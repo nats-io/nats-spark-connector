@@ -17,7 +17,7 @@ final case class SubscriptionConfig(
     streamName: String,
     createConsumer: Boolean,
     consumerConfig: ConsumerConfig,
-    payloadCompression: String // TODO ask about move to ConsumerConfig????
+    payloadCompression: String
 )
 
 final case class NatsSourceConfig(
