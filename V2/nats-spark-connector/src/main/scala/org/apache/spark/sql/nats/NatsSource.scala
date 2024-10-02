@@ -14,14 +14,38 @@ import org.apache.spark.unsafe.types.UTF8String
 
 import java.util
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.Inflater
 import scala.collection.JavaConverters._
 import scala.collection.concurrent.TrieMap
 import scala.collection.convert.ImplicitConversions._
+import scala.collection.Iterator
 import scala.concurrent.duration._
 import scala.util.Try
 
 object MessageToSparkRow {
-  def apply(message: Message): InternalRow = {
+
+  // wartremover friendly zlib decompression
+  //  forked from: https://github.com/nats-io/nats-spark-connector/commit/2f6314d17fab56ba4887509a76fc3b03154d61d7#diff-78057eda4f520613b3bd6358120d2be7b24b6bb55859e5fd597ea2bcacde2dfaR98
+  def decompress(inData: Array[Byte]): Array[Byte] = {
+    val inflater = new Inflater()
+    inflater.setInput(inData)
+    val decompressedData = new Array[Byte](inData.length * 2)
+    val firstCount = inflater.inflate(decompressedData)
+    val firstData = decompressedData.take(firstCount)
+
+    val inflateIter = Iterator.iterate(firstData) { 
+      // iterate calls to inflate until no more data to unpack
+      (data) => 
+        val currCount = inflater.inflate(decompressedData)
+        val currData = decompressedData.take(currCount)
+        if (currCount > 0) currData else null
+    }
+    
+    // run iterator, merge segments and return
+    inflateIter.takeWhile(_ != null).flatten.toArray
+  }
+
+  def apply(message: Message, payloadCompression: String): InternalRow = {
     val headers: Option[Map[String, Seq[String]]] =
       Option(message.getHeaders).map(
         _.entrySet()
@@ -32,13 +56,18 @@ object MessageToSparkRow {
 
     val metadata = message.metaData()
 
+    val messageContent = payloadCompression match {
+      case "zlib" => decompress(message.getData) 
+      case "none" => message.getData 
+    }
+
     val values: Seq[Any] = Seq(
       // "subject
       UTF8String.fromString(message.getSubject),
       // replyTo
       UTF8String.fromString(message.getReplyTo),
       // content
-      message.getData,
+      messageContent,
       // headers map
       headers.orNull,
       // domain
@@ -92,7 +121,8 @@ final case class NatsSourceParams(
     streamName: String,
     consumerName: String,
     batchSize: Int,
-    maxWait: FiniteDuration
+    maxWait: FiniteDuration,
+    payloadCompression: String
 )
 
 class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)

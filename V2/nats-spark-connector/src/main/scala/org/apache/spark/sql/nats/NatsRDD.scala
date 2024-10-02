@@ -58,7 +58,7 @@ class NatsRDD(sc: SparkContext, natsSourceParams: NatsSourceParams)
         .fetch(natsSourceParams.batchSize, natsSourceParams.maxWait.toMillis)
         .iterator()
         .asScala
-        .map(message => (message.getReplyTo, MessageToSparkRow(message)))
+        .map(message => (message.getReplyTo, MessageToSparkRow(message, natsSourceParams.payloadCompression)))
     })
   }
 
