@@ -35,7 +35,7 @@ val initDF = spark
   .option("nats.credential.file", "/Users/mrosti/shh/...")
   .option("nats.pull.subscription.stream.name", "my-stream")
   .option("nats.pull.subscription.durable.name", "my-stream")
-  .option("nats.pull.subscription.payload.compression", "zlib") // default is "none"
+  .option("nats.storage.payload-compression", "zlib") // default is "none"
   .option("nats.pull.consumer.ack.wait", "90")
   .option("nats.pull.consumer.max.batch", "10")
   .option("nats.stream.subjects", "my.stream.data")

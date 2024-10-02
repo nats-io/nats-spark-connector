@@ -10,7 +10,7 @@ package object nats {
   // Subscription Config
   val SourcePullSubscriptionNameOption = "nats.pull.subscription.stream.name"
   val SourcePullSubscriptionDurableOption = "nats.pull.subscription.durable.name"
-  val SourcePullSubscriptionCompressionOption = "nats.pull.subscription.payload.compression"
+  val SourcePullSubscriptionCompressionOption = "nats.storage.payload-compression"
 
   // Consumer Config
   val SourceConsumerCreateOption = "nats.pull.consumer.create"

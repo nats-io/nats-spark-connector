@@ -19,7 +19,7 @@ class NatSourceConfigTest extends FunSuite {
       "nats.stream.subjects" -> "a,b",
       "nats.pull.batch.size" -> "5",
       "nats.pull.wait.time" -> "6",
-      "nats.pull.subscription.payload.compression" -> "zlib"
+      "nats.storage.payload-compression" -> "zlib"
     )
     val createConsumer = false
     val expectedConfig = NatsSourceConfig(
