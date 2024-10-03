@@ -29,7 +29,7 @@ For more information, please refer to the Spark documentation.
 An example Scala source configuration for the NATS connector follows:
 ```scala
 val initDF = spark
-  .format("nats")
+  .format("nats") // use "org.apache.spark.sql.nats" if you see DATA_SOURCE_NOT_FOUND
   .option("nats.host", "localhost")
   .option("nats.port", "4222")
   .option("nats.credential.file", "/Users/mrosti/shh/...")

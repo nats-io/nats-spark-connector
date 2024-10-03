@@ -15,7 +15,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import scala.collection.JavaConverters._
 
-class NatsStreamProvider
+class DefaultSource 
     extends DataSourceRegister
     with StreamSourceProvider
     with StreamSinkProvider {
