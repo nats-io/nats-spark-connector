@@ -1,1 +1,1 @@
-org.apache.spark.sql.nats.NatsStreamProvider
+org.apache.spark.sql.nats.DefaultSource
