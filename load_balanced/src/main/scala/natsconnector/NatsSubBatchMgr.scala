@@ -84,6 +84,7 @@ class NatsSubBatchMgr {
         )
       }
       batch.foreach(msg => msg.ack())
+      this.batchMap -= (batchId)
       committed = true
     }
     committed
