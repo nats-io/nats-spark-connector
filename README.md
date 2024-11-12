@@ -3,16 +3,19 @@
 This repository contains multiple independent kinds of nats-spark-connectors, each flavor
 having its own directory structure, with its own README and SBT build files.
 
-- **V2**
-  This is currently the newest connector, and the one to now use by default. It starts with version 2.0 to avoid any ambiguity with the 'balanced' connector which only has versions 1.x.
-
 - **balanced:**
-  In this scenario, NATS utilizes a single JetStream partition, using a durable
+  The original connector that utilizes a single JetStream partition, using a durable
   and queued configuration to load balance messages across Spark threads, each
   thread contributing to single streaming micro-batch Dataframe at each Spark "pull".
   Current message offset is kept in the NATS queue for the purpose of fault tolerance
   (FT). Spark simply acknowledges each message during a micro-batch 'commit', and
   resends a message if an ack is not received within a pre-set timeframe.
+
+- **V2**
+  This is currently the newest connector, which while initially based on 'balanced' has since
+  taken another approach at the integration between SPARK and NATS and evolved into something 
+  that warrants being a connector on its own.
+  It starts with version 2.0 to avoid any ambiguity with the 'balanced' connector which only has versions 1.x.
 
 - **archived**
 
