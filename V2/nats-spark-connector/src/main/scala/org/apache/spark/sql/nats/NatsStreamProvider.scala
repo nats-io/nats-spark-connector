@@ -11,11 +11,10 @@ import org.apache.spark.sql.sources.StreamSourceProvider
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 
-import java.nio.file.Files
-import java.nio.file.Path
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.JavaConverters._
 
-class DefaultSource 
+class NatsStreamProvider
     extends DataSourceRegister
     with StreamSourceProvider
     with StreamSinkProvider {
@@ -35,10 +34,10 @@ class DefaultSource
       providerName: String,
       parameters: Map[String, String]): Source = {
     val config = NatsSourceConfig(parameters)
-    val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
+    val authFileBytes = Files.readAllBytes(Paths.get(config.jetStreamConfig.credentialsFile))
     val connectionConfig = NatsConnectionConfig(
       authFileBytes,
-      s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}")
+      s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}", parameters)
 
     if (config.subscriptionConfig.createConsumer) {
       val consumerConfiguration = ConsumerConfiguration
@@ -74,11 +73,11 @@ class DefaultSource
       partitionColumns: Seq[String],
       outputMode: OutputMode): Sink = {
     val config = NatsSinkConfig(parameters)
-    val authFileBytes = Files.readAllBytes(Path.of(config.jetStreamConfig.credentialsFile))
+    val authFileBytes = Files.readAllBytes(Paths.get(config.jetStreamConfig.credentialsFile))
     val publisherConfig = NatsPublisherConfig(
       NatsConnectionConfig(
         authFileBytes,
-        s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}"),
+        s"nats://${config.jetStreamConfig.host}:${config.jetStreamConfig.port}", parameters),
       config.stream)
     NatsSink(publisherConfig)
   }

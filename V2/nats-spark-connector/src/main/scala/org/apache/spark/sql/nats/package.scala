@@ -6,6 +6,11 @@ package object nats {
   val SourceJSHostOption = "nats.host"
   val SourceJSPortOption = "nats.port"
   val SourceJSCredentialFileOption = "nats.credential.file"
+  val trustStorePath = "nats.trust-store.path"
+  val trustStorePassword = "nats.trust-store.password"
+  val keyStorePath = "nats.key-store.path"
+  val keyStorePassword = "nats.key-store.password"
+  val tlsAlgorithm = "nats.tls.algorithm"
 
   // Subscription Config
   val SourcePullSubscriptionNameOption = "nats.pull.subscription.stream.name"
