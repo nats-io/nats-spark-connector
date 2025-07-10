@@ -43,6 +43,11 @@ val initDF = spark
   .option("nats.pull.batcher.frequency.secs", "30")
   .option("nats.pull.batch.size", "100")
   .option("nats.pull.wait.time", "10")
+  .option("nats.trust-store.path", "/path/to/trust-store")
+  .option("nats.trust-store.password", "trust_store_password")
+  .option("nats.key-store.path", "/path/to/key-store")
+  .option("nats.key-store.password", "key_store_password")
+  .option("nats.tls.algorithm", "alg")
 ```
 
 JetStream schema
