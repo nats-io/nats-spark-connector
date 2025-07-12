@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / version := "2.1.4"
+ThisBuild / version := "2.1.5"
 
 name := "nats-spark-connector"
 
