@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / version := "2.1.5"
+ThisBuild / version := "2.1.6"
 
 name := "nats-spark-connector"
 
@@ -69,7 +69,10 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
     ShadeRule.rename("shapeless.**" -> "nats_spark_internal.@1").inAll,
     ShadeRule.rename("cats.kernel.**" -> s"nats_spark_internal.kernel.@1").inAll
   ),
-  assemblyMergeStrategy := (_ => MergeStrategy.first)
+  assembly / assemblyMergeStrategy := {
+    case PathList("META-INF", xs @ _*) => MergeStrategy.first
+    case x => (assembly / assemblyMergeStrategy).value(x)
+  }
 )
 
 releaseProcess := Seq[ReleaseStep](
