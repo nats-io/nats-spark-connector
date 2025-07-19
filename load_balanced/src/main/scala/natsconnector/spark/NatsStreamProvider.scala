@@ -43,9 +43,12 @@ class NatsStreamProvider extends DataSourceRegister
       "Source config parameters:\n"
         + s"${parameters}"
     )
-    NatsConfigSource.config.setConnection(parameters)
+    // Create a unique config key based on stream name and other identifying parameters
+    val configKey = createConfigKey(parameters, "source")
+    val config = NatsConfigSource.getConfig(configKey)
+    config.setConnection(parameters)
     val (_, ss) = sourceSchema(sqlContext, schema, providerName, parameters)
-    val source = new NatsStreamingSource(sqlContext, metadataPath, Some(ss), parameters)
+    val source = new NatsStreamingSource(sqlContext, metadataPath, Some(ss), parameters, config)
     source
   }
 
@@ -57,11 +60,24 @@ class NatsStreamProvider extends DataSourceRegister
       "Sink config parameters:\n"
         + s"${parameters}"
     )
-    NatsConfigSink.config.setConnection(parameters)
-    val sink = new NatsStreamingSink(sqlContext, parameters, partitionColumns, outputMode)
+    // Create a unique config key based on parameters
+    val configKey = createConfigKey(parameters, "sink")
+    val config = NatsConfigSink.getConfig(configKey)
+    config.setConnection(parameters)
+    val sink = new NatsStreamingSink(sqlContext, parameters, partitionColumns, outputMode, config)
     sink
   }
 
   override def shortName(): String = "nats"
+  
+  private def createConfigKey(parameters: Map[String, String], sourceType: String): String = {
+    val host = parameters.getOrElse("nats.host", "localhost")
+    val port = parameters.getOrElse("nats.port", "4222")
+    val streamName = parameters.getOrElse("nats.stream.name", "default")
+    val subjects = parameters.getOrElse("nats.stream.subjects", "default")
+    val durable = parameters.getOrElse("nats.durable.name", "")
+    
+    s"${sourceType}-${host}-${port}-${streamName}-${subjects}-${durable}-${Thread.currentThread().getId}"
+  }
 
 }
