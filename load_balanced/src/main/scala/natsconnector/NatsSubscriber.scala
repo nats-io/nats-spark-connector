@@ -13,16 +13,16 @@ import scala.collection.JavaConversions._
 import java.util.ArrayList
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
 
-class NatsSubscriber() {
-  val subjects:String = NatsConfigSource.config.streamSubjects.get
-  //val deliverySubject:String = NatsConfigSource.config.queueDeliverySubject
-  //val queue:String = NatsConfigSource.config.queue
-  val js:JetStream = NatsConfigSource.config.js.get
-  val nc:Connection = NatsConfigSource.config.nc.get
-  val messageReceiveWaitTime:Duration = NatsConfigSource.config.messageReceiveWaitTime
-  val durable:Option[String] = NatsConfigSource.config.durable
-  val streamName = NatsConfigSource.config.streamName.get
-  val fetchBatchSize = NatsConfigSource.config.msgFetchBatchSize
+class NatsSubscriber(natsConfig: NatsConfig) {
+  val subjects:String = natsConfig.streamSubjects.get
+  //val deliverySubject:String = natsConfig.queueDeliverySubject
+  //val queue:String = natsConfig.queue
+  val js:JetStream = natsConfig.js.get
+  val nc:Connection = natsConfig.nc.get
+  val messageReceiveWaitTime:Duration = natsConfig.messageReceiveWaitTime
+  val durable:Option[String] = natsConfig.durable
+  val streamName = natsConfig.streamName.get
+  val fetchBatchSize = natsConfig.msgFetchBatchSize
 
   val jSub: JetStreamSubscription = {
     val subjectArray = this.subjects.replace(" ", "").split(",")
@@ -45,7 +45,7 @@ class NatsSubscriber() {
       js.subscribe(null, pso)
     } catch {
       case ex: IllegalStateException =>
-        if (NatsConfigSource.config.isLocal) {
+        if (natsConfig.isLocal) {
           val logger: Logger = NatsLogger.logger
           logger.error(s"Error subscribing to NATS stream ${this.streamName} ${this.durable} : ${ex.getMessage()}\n ${ex.printStackTrace()}")
         }

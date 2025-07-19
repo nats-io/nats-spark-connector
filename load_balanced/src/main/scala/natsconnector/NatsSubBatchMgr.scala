@@ -21,7 +21,7 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.SparkSession
 import java.util.zip
 
-class NatsSubBatchMgr {
+class NatsSubBatchMgr(natsConfig: NatsConfig) {
   val isLocal = false
   var payloadCompression:Option[String] = None
   val batchMap:Map[String, List[Message]] = Map.empty[String, List[Message]]
@@ -37,7 +37,7 @@ class NatsSubBatchMgr {
     this.payloadCompression = payloadCompression
 
 
-    val batcher = new Batcher()
+    val batcher = new Batcher(natsConfig)
     val batcherThread = new Thread(batcher)
     batcherThread.start()
     val newId = System.currentTimeMillis() + batcherThread.getName()
@@ -91,13 +91,19 @@ class NatsSubBatchMgr {
   }
 
   def publishBatch(batch:List[NatsMsg]):Unit = {
-    val natsPublisher:NatsPublisher = new NatsPublisher()
+    val natsPublisher:NatsPublisher = new NatsPublisher(natsConfig)
     batch.foreach(msg => natsPublisher.sendNatsMsg(msg))
   }
 
 
   def publishMsg(msg:NatsMsg):Unit = {
-    new NatsPublisher().sendNatsMsg(msg)
+    new NatsPublisher(natsConfig).sendNatsMsg(msg)
+  }
+  
+  def stop(): Unit = {
+    batcherMap.values.foreach(_.stop())
+    batcherMap.clear()
+    batchMap.clear()
   }
 
   private def decompress(inData: Array[Byte]): Array[Byte] = {
@@ -115,7 +121,7 @@ class NatsSubBatchMgr {
 
   private def convertBatch(in:List[Message]):List[NatsMsg] = {
     var buffer:ListBuffer[NatsMsg] = ListBuffer.empty[NatsMsg]
-    val df:DateTimeFormatter = DateTimeFormatter.ofPattern(NatsConfigSource.config.dateTimeFormat)
+    val df:DateTimeFormatter = DateTimeFormatter.ofPattern(natsConfig.dateTimeFormat)
 
    def getHeaders (msg:Message):Option[Map[String, List[String]]] = {
      if (msg.hasHeaders) {
@@ -200,9 +206,9 @@ case class NatsMsg(val subject:String, val dateTime:String, val content:Array[By
   }
 }
 
-class Batcher() extends Runnable {
+class Batcher(natsConfig: NatsConfig) extends Runnable {
   var buffer:ListBuffer[Message] = ListBuffer.empty[Message]
-  val natsSubscriber = new NatsSubscriber()
+  val natsSubscriber = new NatsSubscriber(natsConfig)
   @volatile var doRun = true
   @volatile var semaphore = false
 
@@ -215,6 +221,10 @@ class Batcher() extends Runnable {
     natsSubscriber.unsubscribe()
   }
 
+  def stop(): Unit = {
+    this.doRun = false
+  }
+  
   def stopAndGetBatch():List[Message] = {
     this.doRun = false
     while(this.semaphore) {Thread.sleep(10)}

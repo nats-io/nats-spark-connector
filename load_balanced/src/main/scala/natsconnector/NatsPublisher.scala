@@ -16,9 +16,9 @@ import java.time.format.DateTimeFormatter
 import org.apache.log4j.Logger
 
 
-class NatsPublisher {
+class NatsPublisher(natsConfig: NatsConfig) {
   val isLocal = false
-  val nc:Connection = NatsConfigSink.config.nc.get
+  val nc:Connection = natsConfig.nc.get
   // val js:JetStream = NatsConfigSink.config.js.get
   // val stream = NatsConfigSink.config.streamName.get
   
@@ -62,8 +62,7 @@ class NatsPublisher {
   }
 
   def flush():Unit = {
-    val nc:Connection = NatsConfigSink.config.nc.get
-    val duration:Duration = NatsConfigSink.config.flushWaitTime
+    val duration:Duration = natsConfig.flushWaitTime
     
     nc.flush(duration)
   }

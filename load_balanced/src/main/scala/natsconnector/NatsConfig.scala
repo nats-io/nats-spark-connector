@@ -28,15 +28,40 @@ import java.nio.file.{Files, Paths}
 import java.security.{KeyStore, SecureRandom}
 import javax.net.ssl.{KeyManagerFactory, SSLContext, TrustManagerFactory}
 
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.concurrent
+import scala.collection.JavaConverters._
+
 object NatsConfigSource {
-  val config = new NatsConfig(true)
+  private val configs: concurrent.Map[String, NatsConfig] = 
+    new ConcurrentHashMap[String, NatsConfig]().asScala
+  
+  def getConfig(configKey: String): NatsConfig = {
+    configs.getOrElseUpdate(configKey, new NatsConfig(true))
+  }
+  
+  def removeConfig(configKey: String): Unit = {
+    configs.get(configKey).foreach(_.close())
+    configs.remove(configKey)
+  }
 }
 
 object NatsConfigSink {
-  val config = new NatsConfig(false)
+  private val configs: concurrent.Map[String, NatsConfig] = 
+    new ConcurrentHashMap[String, NatsConfig]().asScala
+  
+  def getConfig(configKey: String): NatsConfig = {
+    configs.getOrElseUpdate(configKey, new NatsConfig(false))
+  }
+  
+  def removeConfig(configKey: String): Unit = {
+    configs.get(configKey).foreach(_.close())
+    configs.remove(configKey)
+  }
 }
 
 class NatsConfig(isSource: Boolean) {
+  @volatile private var _closed = false
   val isLocal = false
   // Note on security:
   // Set the environment variable NATS_NKEY to use challenge response authentication by setting a file containing your private key.
@@ -104,7 +129,7 @@ class NatsConfig(isSource: Boolean) {
   var js: Option[JetStream] = None
 
   // =========================================================================================================
-  def setConnection(parameters: Map[String, String]): Any = {
+  def setConnection(parameters: Map[String, String]): Any = synchronized {
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
       logger.info("=====================In NatsConfig.setConnection")
@@ -573,6 +598,26 @@ class NatsConfig(isSource: Boolean) {
 
     builder.build()
   }
+  
+  def close(): Unit = synchronized {
+    if (!_closed) {
+      _closed = true
+      try {
+        nc.foreach { connection =>
+          if (!connection.getStatus.equals(io.nats.client.Connection.Status.CLOSED)) {
+            connection.close()
+          }
+        }
+      } catch {
+        case _: Exception => // Ignore exceptions during cleanup
+      }
+      nc = None
+      js = None
+      options = None
+    }
+  }
+  
+  def isClosed: Boolean = _closed
 }
 
 object NatsLogger {

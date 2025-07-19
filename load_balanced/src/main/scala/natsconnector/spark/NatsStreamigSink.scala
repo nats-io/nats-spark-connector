@@ -23,10 +23,11 @@ import io.nats.client.Message
 class NatsStreamingSink(sqlContext: SQLContext,
                                  parameters: Map[String, String],
                                  partitionColumns: Seq[String],
-                                 outputMode: OutputMode)
+                                 outputMode: OutputMode,
+                                 natsConfig: NatsConfig)
   extends Sink {
-  val options = NatsConfigSink.config.options      
-  val con = Nats.connect(options.get)
+  val options = natsConfig.options      
+  val con = natsConfig.nc.get
   override def addBatch(batchId: Long, data: DataFrame):Unit = {
     // println("=====================In NatsStreamingSink.addBatch")
     // conver data frame into a list of NatsMsg
