@@ -4,6 +4,9 @@ name := "nats-spark-connector-balanced"
 version := "1.2.6"
 scalaVersion := "2.12.19"
 
+// Fix classloader issues for tests
+Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.ScalaLibrary
+
 val sparkVersion = "3.3.4"
 val slf4jVersion = "2.0.3"
 val log4jVersion = "2.23.1"
@@ -28,6 +31,8 @@ libraryDependencies ++= Seq(
   "org.apache.logging.log4j" % "log4j-api" % log4jVersion,
   "org.apache.logging.log4j" % "log4j-core" % log4jVersion,
   "org.json4s" %% "json4s-jackson" % json4sVersion,
+  "org.scalatest" %% "scalatest" % "3.2.17" % Test,
+  "org.scalatestplus" %% "mockito-4-11" % "3.2.17.0" % Test,
 )
 
 assemblyMergeStrategy := (_ => MergeStrategy.first)
