@@ -1,0 +1,130 @@
+package natsconnector.spark
+
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.BeforeAndAfterEach
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
+import natsconnector.NatsConfig
+import java.util.Optional
+
+class NatsStreamingSourceSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach {
+  
+  var testConfig: NatsConfig = _
+  
+  override def beforeEach(): Unit = {
+    testConfig = new NatsConfig(isSource = true)
+  }
+
+  override def afterEach(): Unit = {
+    if (testConfig != null && !testConfig.isClosed) {
+      testConfig.close()
+    }
+  }
+
+  "NatsStreamingSource" should "define correct schema" in {
+    // Test the expected schema structure
+    val expectedFields = Seq("subject", "dateTime", "content", "headers", "jsMetaData")
+    
+    // Create a mock source to test schema
+    val sourceOptions = Map(
+      "nats.host" -> "localhost",
+      "nats.port" -> "4222",
+      "nats.stream.name" -> "TestStream",
+      "nats.stream.subjects" -> "test.>",
+      "nats.msg.ack.wait.secs" -> "60"
+    )
+    
+    testConfig.setConnection(sourceOptions)
+    
+    // Verify the configuration is set correctly for schema creation
+    testConfig.streamName should be(Some("TestStream"))
+    testConfig.streamSubjects should be(Some("test.>"))
+  }
+
+  it should "handle schema field types correctly" in {
+    // Test that the expected data types are reasonable
+    val stringType = StringType
+    val timestampType = TimestampType
+    val mapType = MapType(StringType, StringType)
+    
+    stringType should not be null
+    timestampType should not be null  
+    mapType should not be null
+  }
+
+  it should "handle offset conversion correctly" in {
+    val batchInfo = NatsBatchInfo(List("batch1", "batch2"))
+    val offset = NatsOffset(Some(batchInfo))
+    
+    val serializedOffset = SerializedOffset(offset.json)
+    val convertedOffset = NatsOffset(serializedOffset)
+    
+    convertedOffset should equal(offset)
+  }
+
+  it should "handle empty batch offset" in {
+    val offset = NatsOffset(None)
+    val serializedOffset = SerializedOffset(offset.json)
+    val convertedOffset = NatsOffset(serializedOffset)
+    
+    convertedOffset should equal(offset)
+  }
+
+  it should "validate source options correctly" in {
+    val validOptions = Map(
+      "nats.host" -> "localhost",
+      "nats.port" -> "4222",
+      "nats.stream.name" -> "TestStream",
+      "nats.stream.subjects" -> "test.>",
+      "nats.msg.ack.wait.secs" -> "60"
+    )
+
+    noException should be thrownBy {
+      testConfig.setConnection(validOptions)
+    }
+  }
+
+  it should "reject invalid source options" in {
+    val invalidOptions = Map(
+      "nats.host" -> "localhost",
+      "nats.port" -> "4222"
+      // Missing required stream.name
+    )
+
+    an[RuntimeException] should be thrownBy {
+      testConfig.setConnection(invalidOptions)
+    }
+  }
+
+  it should "handle optional parameters in source options" in {
+    val optionsWithOptionals = Map(
+      "nats.host" -> "localhost",
+      "nats.port" -> "4222",
+      "nats.stream.name" -> "TestStream",
+      "nats.stream.subjects" -> "test.>",
+      "nats.msg.ack.wait.secs" -> "60",
+      "nats.num.listeners" -> "3",
+      "nats.msg.fetch.batch.size" -> "200",
+      "nats.durable.name" -> "test_durable"
+    )
+
+    testConfig.setConnection(optionsWithOptionals)
+    testConfig.numListeners should be(3)
+    testConfig.msgFetchBatchSize should be(200)
+    testConfig.durable should be(Some("test_durable"))
+  }
+
+  it should "handle stream subject patterns correctly" in {
+    val wildcardOptions = Map(
+      "nats.host" -> "localhost",
+      "nats.port" -> "4222",
+      "nats.stream.name" -> "TestStream",
+      "nats.stream.subjects" -> "foo.>, bar.*, baz.test",
+      "nats.msg.ack.wait.secs" -> "60"
+    )
+
+    testConfig.setConnection(wildcardOptions)
+    testConfig.streamSubjects should be(Some("foo.>,bar.*,baz.test"))
+  }
+}

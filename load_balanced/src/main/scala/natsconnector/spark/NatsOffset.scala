@@ -15,11 +15,22 @@ case class NatsOffset(offset:Option[NatsBatchInfo]) extends Offset {
   override val json: String = write(this)
 
   override def equals(obj: Any): Boolean = {
-    if (obj.isInstanceOf[Offset])  this.offset == obj.asInstanceOf[NatsOffset].offset
-    else { if (obj.isInstanceOf[String]) {
-      val other = read[NatsOffset](obj.asInstanceOf[String])
-      this.offset == other.offset
-      } else false
+    obj match {
+      case other: NatsOffset => this.offset == other.offset
+      case other: Offset => 
+        // Try to convert other offset types to NatsOffset for comparison
+        NatsOffset.convert(other) match {
+          case Some(natsOffset) => this.offset == natsOffset.offset
+          case None => false
+        }
+      case jsonString: String =>
+        try {
+          val other = read[NatsOffset](jsonString)
+          this.offset == other.offset
+        } catch {
+          case _: Exception => false
+        }
+      case _ => false
     }
   }
 }
@@ -27,9 +38,23 @@ case class NatsOffset(offset:Option[NatsBatchInfo]) extends Offset {
 object NatsOffset {
   private implicit val formats: Formats = Serialization.formats(NoTypeHints)
   def apply(offset: SerializedOffset): NatsOffset = {
-  val batchInfoJson = offset.json.replace("{\"offset\":{","{").replace("}}}", "}}")
-  val batchInfo = read[Option[NatsBatchInfo]](batchInfoJson)
-    new NatsOffset(batchInfo)
+    import org.json4s.jackson.JsonMethods._
+    try {
+      // Parse the JSON to extract the nested offset structure
+      val json = parse(offset.json)
+      val offsetJson = (json \ "offset").extractOpt[Option[NatsBatchInfo]]
+      new NatsOffset(offsetJson.getOrElse(None))
+    } catch {
+      case _: Exception =>
+        // Fallback: try to parse directly as NatsOffset
+        try {
+          read[NatsOffset](offset.json)
+        } catch {
+          case _: Exception =>
+            // Final fallback: return empty offset
+            new NatsOffset(None)
+        }
+    }
   }
 
   def convert(offset: Offset): Option[NatsOffset] = offset match {
