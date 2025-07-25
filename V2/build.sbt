@@ -70,7 +70,13 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
     ShadeRule.rename("cats.kernel.**" -> s"nats_spark_internal.kernel.@1").inAll
   ),
   assembly / assemblyMergeStrategy := {
-    case PathList("META-INF", xs @ _*) => MergeStrategy.first
+    case PathList("META-INF", xs @ _*) =>
+      xs.map(_.toLowerCase) match {
+        case ps @ (x :: xs) if ps.exists(_.endsWith(".sf")) => MergeStrategy.discard
+        case ps @ (x :: xs) if ps.exists(_.endsWith(".dsa")) => MergeStrategy.discard
+        case ps @ (x :: xs) if ps.exists(_.endsWith(".rsa")) => MergeStrategy.discard
+        case _ => MergeStrategy.first
+      }
     case x => (assembly / assemblyMergeStrategy).value(x)
   }
 )

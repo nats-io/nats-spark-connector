@@ -1,0 +1,47 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*' # Only runs when a tag like v1.0.0 is pushed
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - uses: sbt/setup-sbt@v1    
+    - name: Build V2
+      working-directory: V2
+      run: |
+        echo "Building V2"
+        sbt clean test package assembly
+        ls nats-spark-connector/target/scala-2.12/
+
+    - name: Build Loadbalanced
+      working-directory: load_balanced
+      run: |
+        echo "Building Loadbalanced"
+        sbt clean test package assembly
+        ls target/scala-2.12/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        files: |
+          V2/nats-spark-connector/target/scala-2.12/*.jar
+          load_balanced/target/scala-2.12/*.jar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+        
+
