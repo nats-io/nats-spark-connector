@@ -173,7 +173,7 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
 
          msgHeaders(key)= value.toList
        })
-       Some(msgHeaders.toMap)
+       Some(msgHeaders)
      } else {
        None
      }
