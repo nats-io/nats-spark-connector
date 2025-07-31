@@ -45,12 +45,14 @@ object NatsOffset {
       val offsetJson = (json \ "offset").extractOpt[Option[NatsBatchInfo]]
       new NatsOffset(offsetJson.getOrElse(None))
     } catch {
-      case _: Exception =>
+      case e: Exception =>
+        logger.warn("Failed to parse nested offset structure. Attempting direct deserialization as NatsOffset.", e)
         // Fallback: try to parse directly as NatsOffset
         try {
           read[NatsOffset](offset.json)
         } catch {
-          case _: Exception =>
+          case e: Exception =>
+            logger.error("Failed to parse JSON directly as NatsOffset. Returning empty offset as fallback.", e)
             // Final fallback: return empty offset
             new NatsOffset(None)
         }
