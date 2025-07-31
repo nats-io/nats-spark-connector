@@ -609,7 +609,8 @@ class NatsConfig(isSource: Boolean) {
           }
         }
       } catch {
-        case _: Exception => // Ignore exceptions during cleanup
+        case e: Exception =>
+          NatsLogger.logger.debug("Exception during cleanup in NatsConfig.close():", e)
       }
       nc = None
       js = None
