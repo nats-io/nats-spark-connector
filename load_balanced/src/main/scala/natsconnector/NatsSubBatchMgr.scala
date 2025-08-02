@@ -67,19 +67,6 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
         batch = convertBatch(b)
         batcherMap.remove(batchId)
         batchMap.put(batchId, b)
-        
-        // Wait for thread to finish and clean up
-        threadMap.get(batchId) foreach { thread =>
-          try {
-            thread.join(5000) // Wait up to 5 seconds for thread to finish
-            if (thread.isAlive) {
-              thread.interrupt() // Force interrupt if still running
-            }
-          } catch {
-            case _: InterruptedException => // Ignore
-          }
-          threadMap.remove(batchId)
-        }
       case None =>
         // Batch ID not found, return empty batch
     }
@@ -123,28 +110,6 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
     // Use shared publisher to avoid resource leaks  
     natsPublisher.sendNatsMsg(msg)
   }
-  
-  def stop(): Unit = synchronized {
-    // Stop all running batchers
-    batcherMap.values.foreach(_.stop())
-    
-    // Wait for all threads to finish gracefully
-    threadMap.values.foreach { thread =>
-      try {
-        thread.join(3000) // Wait up to 3 seconds per thread
-        if (thread.isAlive) {
-          thread.interrupt() // Force interrupt if still running
-        }
-      } catch {
-        case _: InterruptedException => // Ignore
-      }
-    }
-    
-    // Clear all maps
-    batcherMap.clear()
-    threadMap.clear()
-    batchMap.clear()
-  }
 
   private def decompress(inData: Array[Byte]): Array[Byte] = {
     val inflater = new Inflater()
@@ -173,7 +138,7 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
 
          msgHeaders(key)= value.toList
        })
-       Some(msgHeaders)
+       Some(msgHeaders.toMap)
      } else {
        None
      }
@@ -275,24 +240,14 @@ class Batcher(natsConfig: NatsConfig) extends Runnable {
     this.doRun = false
   }
   
-  def stopAndGetBatch():List[Message] = {
-    this.doRun = false
-    // Wait for current operation to complete, with timeout
-    var waitCount = 0
-    while(this.semaphore && waitCount < 500) { // Max 5 seconds wait
-      try {
-        Thread.sleep(10)
-        waitCount += 1
-      } catch {
-        case _: InterruptedException =>
-          Thread.currentThread().interrupt()
-          return this.buffer.toList // Return current buffer on interrupt
-      }
-    }
-    this.buffer.toList
+
+    def stopAndGetBatch():List[Message] = {
+      this.doRun = false
+      while(this.semaphore) {Thread.sleep(10)}
+      this.buffer.toList
   }
 
-  private def pullAndLoadBatch():Unit = {
+  private def   pullAndLoadBatch():Unit = {
     this.semaphore = true
     val msgList = this.natsSubscriber.pullNext()
 

@@ -19,19 +19,6 @@ import org.apache.log4j.Logger
 class NatsPublisher(natsConfig: NatsConfig) {
   val isLocal = false
   val nc:Connection = natsConfig.nc.get
-  // val js:JetStream = NatsConfigSink.config.js.get
-  // val stream = NatsConfigSink.config.streamName.get
-  
-  // Will we need this functionality?
-  def sendJetStreamMsg(data:String, subject:String):Unit = {
-    //nc.publish(subject, data)
-    if(this.isLocal) {
-      val logger:Logger = NatsLogger.logger
-      logger.debug(s"publishing JetStream msg:${data}")
-    }
-    // val po:PublishOptions = PublishOptions.builder().stream(this.stream).build()
-    // val pa:PublishAck = js.publish(subject, data.getBytes(StandardCharsets.US_ASCII), po)
-  }
 
   def sendNatsMsg(data:String, subject:String):Unit = {
     val headers:Headers = new Headers()

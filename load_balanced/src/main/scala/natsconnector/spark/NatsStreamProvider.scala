@@ -76,7 +76,7 @@ class NatsStreamProvider extends DataSourceRegister
     val streamName = parameters.getOrElse("nats.stream.name", "default")
     val subjects = parameters.getOrElse("nats.stream.subjects", "default")
     val durable = parameters.getOrElse("nats.durable.name", "")
-    
+
     s"${sourceType}-${host}-${port}-${streamName}-${subjects}-${durable}-${Thread.currentThread().getId}"
   }
 

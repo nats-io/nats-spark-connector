@@ -5,6 +5,8 @@ import org.json4s.{Formats, NoTypeHints}
 import org.json4s.jackson.Serialization
 import org.json4s.jackson.Serialization.write
 import org.json4s.jackson.Serialization.read
+import natsconnector.NatsLogger
+import org.apache.log4j.Logger
 
 import java.util.function.LongFunction
 
@@ -37,6 +39,8 @@ case class NatsOffset(offset:Option[NatsBatchInfo]) extends Offset {
 
 object NatsOffset {
   private implicit val formats: Formats = Serialization.formats(NoTypeHints)
+  val logger:Logger = NatsLogger.logger
+
   def apply(offset: SerializedOffset): NatsOffset = {
     import org.json4s.jackson.JsonMethods._
     try {

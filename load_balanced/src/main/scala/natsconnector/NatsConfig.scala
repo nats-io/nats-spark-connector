@@ -41,8 +41,7 @@ object NatsConfigSource {
   }
   
   def removeConfig(configKey: String): Unit = {
-    configs.get(configKey).foreach(_.close())
-    configs.remove(configKey)
+    configs.remove(configKey).foreach(_.close())
   }
 }
 
@@ -55,8 +54,7 @@ object NatsConfigSink {
   }
   
   def removeConfig(configKey: String): Unit = {
-    configs.get(configKey).foreach(_.close())
-    configs.remove(configKey)
+    configs.remove(configKey).foreach(_.close())
   }
 }
 

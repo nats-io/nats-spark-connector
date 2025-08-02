@@ -47,11 +47,11 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
 
     override def stop(): Unit = {
+        val nc = natsConfig.nc
         try {
-            batchMgr.stop()
-            // Don't close the config here as it might be shared by other sources
+            nc.get.drain(Duration.ofSeconds(30))
         } catch {
-            case e: Exception => this.logger.error(s"Error stopping NATS source: ${e.getMessage()}")
+            case e: TimeoutException => this.logger.error(s"Timeout draining NATS connection: ${e.getMessage()}")
         }
     }
 
