@@ -4,7 +4,7 @@ import io.nats.client.{Connection, Nats, Options}
 import org.apache.spark.internal.Logging
 
 @SuppressWarnings(Array("org.wartremover.warts.ArrayEquals"))
-final case class NatsConnectionConfig(secretBytes: Array[Byte], url: String, params: Map[String, String])
+final case class NatsConnectionConfig(secretBytes: Array[Byte], url: String, params: Map[String, String], jsAPIPrefix: String)
 
 object NatsConnection extends Logging with Serializable {
 

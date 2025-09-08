@@ -1,7 +1,6 @@
 package org.apache.spark.sql.nats
 
-import io.nats.client.Message
-import io.nats.client.PublishOptions
+import io.nats.client.{JetStreamOptions, Message, PublishOptions}
 import io.nats.client.impl.Headers
 import io.nats.client.impl.NatsMessage
 import org.apache.spark.internal.Logging
@@ -64,7 +63,9 @@ class NatsSink(natsPublisherConfig: NatsPublisherConfig) extends Sink with Loggi
       .as[NatsMessageRow]
       .foreachPartition((iterator: Iterator[NatsMessageRow]) => {
         withConnection(connectionConfig)(connection => {
-          val jetStream = connection.jetStream()
+
+          val jetStreamOptions = JetStreamOptions.builder().prefix(connectionConfig.jsAPIPrefix).build()
+          val jetStream = connection.jetStream(jetStreamOptions)
           val publishOptions =
             PublishOptions.builder().stream(stream).build()
           iterator.map(MessageBuilder(_)).foreach(jetStream.publish(_, publishOptions))
