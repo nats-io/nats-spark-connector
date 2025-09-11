@@ -1,11 +1,10 @@
 package org.apache.spark.sql.nats
 
-import io.nats.client.Message
+import io.nats.client.{JetStreamOptions, Message}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, MapData}
 import org.apache.spark.sql.execution.streaming._
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.nats.NatsConnection.withConnection
@@ -18,7 +17,6 @@ import java.util.zip.Inflater
 import scala.collection.JavaConverters._
 import scala.collection.concurrent.TrieMap
 import scala.collection.convert.ImplicitConversions._
-import scala.collection.Iterator
 import scala.concurrent.duration._
 import scala.util.Try
 
@@ -46,12 +44,13 @@ object MessageToSparkRow {
   }
 
   def apply(message: Message, payloadCompression: String): InternalRow = {
-    val headers: Option[Map[String, Seq[String]]] =
+
+    val headers: Option[Map[UTF8String, Seq[UTF8String]]] =
       Option(message.getHeaders).map(
         _.entrySet()
           .toSet
           .map((me: util.Map.Entry[String, util.List[String]]) =>
-            (me.getKey, me.getValue.asScala.toSeq))
+            (UTF8String.fromString(me.getKey), me.getValue.asScala.map(UTF8String.fromString).toSeq))
           .toMap)
 
     val metadata = message.metaData()
@@ -59,6 +58,20 @@ object MessageToSparkRow {
     val messageContent = payloadCompression match {
       case "zlib" => decompress(message.getData) 
       case "none" => message.getData 
+    }
+
+    val headersMapData: Option[MapData] = {
+      if (headers.nonEmpty) {
+        Some(
+          headers.map { h =>
+            val keys = ArrayData.toArrayData(h.keys.toArray )
+            val values = ArrayData.toArrayData(h.values.map(v => ArrayData.toArrayData(v.toArray)).toArray)
+            new ArrayBasedMapData(keys, values)
+          }.orNull
+        )
+      } else {
+        None
+      }
     }
 
     val values: Seq[Any] = Seq(
@@ -69,7 +82,7 @@ object MessageToSparkRow {
       // content
       messageContent,
       // headers map
-      headers.orNull,
+      headersMapData.orNull,
       // domain
       UTF8String.fromString(metadata.getDomain),
       // stream
@@ -138,8 +151,9 @@ class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
   override def getOffset: Option[Offset] = {
     logInfo("getOffset")
     val pending = withConnection(natsSourceParams.natsConnectionConfig)(conn => {
+      val jetStreamOptions = JetStreamOptions.builder().prefix(natsSourceParams.natsConnectionConfig.jsAPIPrefix).build()
       val consumerInfo = conn
-        .jetStream()
+        .jetStream(jetStreamOptions)
         .getConsumerContext(natsSourceParams.streamName, natsSourceParams.consumerName)
         .getConsumerInfo
       consumerInfo.getNumWaiting + consumerInfo.getNumPending

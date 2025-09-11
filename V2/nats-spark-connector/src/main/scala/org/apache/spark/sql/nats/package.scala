@@ -23,6 +23,7 @@ package object nats {
   val SourceConsumerMaxAckPendingOption = "nats.pull.consumer.max.ack.pending"
   val SourceConsumerMaxBatchOption = "nats.pull.consumer.max.batch"
   val SourceConsumerFilterSubjectsOption = "nats.stream.subjects"
+  val sourceJsAPIPrefix = "nats.source.js.api-prefix"
 
   // Pull batcher config
   val SourcePullBatchSizeOption = "nats.pull.batch.size"
@@ -33,5 +34,6 @@ package object nats {
   val SinkJSPortOption = "nats.port"
   val SinkJSCredentialFileOption = "nats.credential.file"
   val SinkStreamNameOption = "nats.stream.name"
+  val sinkJsAPIPrefix = "nats.sink.js.api-prefix"
 
 }

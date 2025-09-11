@@ -48,6 +48,8 @@ val initDF = spark
   .option("nats.key-store.path", "/path/to/key-store")
   .option("nats.key-store.password", "key_store_password")
   .option("nats.tls.algorithm", "alg")
+  .option("nats.source.js.api-prefix", "source-js-api-prefix")
+  .option("nats.sink.js.api-prefix", "sink-js-api-prefix")
 ```
 
 JetStream schema

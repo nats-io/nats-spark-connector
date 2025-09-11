@@ -1,6 +1,6 @@
 package org.apache.spark.sql.nats
 
-import io.nats.client.PullSubscribeOptions
+import io.nats.client.{JetStreamOptions, PullSubscribeOptions}
 import io.nats.client.impl.AckType
 import org.apache.spark.Partition
 import org.apache.spark.SparkContext
@@ -52,8 +52,9 @@ class NatsRDD(sc: SparkContext, natsSourceParams: NatsSourceParams)
       logDebug("Starting iterator")
       val pullSubscriptionConf = PullSubscribeOptions
         .fastBind(natsSourceParams.streamName, natsSourceParams.consumerName)
+      val jetStreamOptions = JetStreamOptions.builder().prefix(natsSourceParams.natsConnectionConfig.jsAPIPrefix).build()
       conn
-        .jetStream()
+        .jetStream(jetStreamOptions)
         .subscribe(None.orNull, pullSubscriptionConf)
         .fetch(natsSourceParams.batchSize, natsSourceParams.maxWait.toMillis)
         .iterator()
@@ -66,8 +67,9 @@ class NatsRDD(sc: SparkContext, natsSourceParams: NatsSourceParams)
   override protected def getPartitions: Array[Partition] = {
     logInfo("getPartitions")
     withConnection(natsSourceParams.natsConnectionConfig)(conn => {
+      val jetStreamOptions = JetStreamOptions.builder().prefix(natsSourceParams.natsConnectionConfig.jsAPIPrefix).build()
       val numPending = conn
-        .jetStream()
+        .jetStream(jetStreamOptions)
         .getConsumerContext(natsSourceParams.streamName, natsSourceParams.consumerName)
         .getConsumerInfo
         .getNumPending
