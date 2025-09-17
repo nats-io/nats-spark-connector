@@ -1,6 +1,6 @@
 import ReleaseTransformations._
 
-ThisBuild / version := "2.1.7"
+ThisBuild / version := "2.1.8"
 
 name := "nats-spark-connector"
 
@@ -22,7 +22,7 @@ ThisBuild / semanticdbVersion := scalafixSemanticdb.revision // only required fo
 publishTo := None
 
 val sparkVersion = "3.5.1"
-val natsVersion = "2.21.4"
+val natsVersion = "2.22.0"
 val munitVersion = "0.7.29"
 
 // TODO(@Marcus-Rosti): build the other connector styles here
