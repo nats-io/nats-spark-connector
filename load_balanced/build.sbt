@@ -30,9 +30,20 @@ libraryDependencies ++= Seq(
   "org.apache.logging.log4j" % "log4j-slf4j-impl" % log4jVersion,
   "org.apache.logging.log4j" % "log4j-api" % log4jVersion,
   "org.apache.logging.log4j" % "log4j-core" % log4jVersion,
-  "org.json4s" %% "json4s-jackson" % json4sVersion,
+  "org.json4s" %% "json4s-jackson" % json4sVersion % Provided,
   "org.scalatest" %% "scalatest" % "3.2.17" % Test,
   "org.scalatestplus" %% "mockito-4-11" % "3.2.17.0" % Test,
 )
 
-assemblyMergeStrategy := (_ => MergeStrategy.first)
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", "MANIFEST.MF")              => MergeStrategy.discard
+  case PathList("META-INF", "INDEX.LIST")               => MergeStrategy.discard
+  case PathList("META-INF", xs @ _*) if xs.exists { n =>
+    n.endsWith(".SF") || n.endsWith(".DSA") || n.endsWith(".RSA")
+  }                                                     => MergeStrategy.discard
+  case PathList("META-INF", "DEPENDENCIES")             => MergeStrategy.discard
+  case PathList("module-info.class")                    => MergeStrategy.discard
+  case PathList("META-INF", "services", _ @ _*)         => MergeStrategy.filterDistinctLines
+  case "reference.conf"                                 => MergeStrategy.concat
+  case _                                                => MergeStrategy.first
+}

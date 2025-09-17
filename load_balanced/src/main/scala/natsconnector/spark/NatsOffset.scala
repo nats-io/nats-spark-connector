@@ -47,7 +47,7 @@ object NatsOffset {
       // Parse the JSON to extract the nested offset structure
       val json = parse(offset.json)
       val offsetJson = (json \ "offset").extractOpt[Option[NatsBatchInfo]]
-      new NatsOffset(offsetJson.getOrElse(None))
+      NatsOffset(offsetJson.getOrElse(None))
     } catch {
       case e: Exception =>
         logger.warn("Failed to parse nested offset structure. Attempting direct deserialization as NatsOffset.", e)

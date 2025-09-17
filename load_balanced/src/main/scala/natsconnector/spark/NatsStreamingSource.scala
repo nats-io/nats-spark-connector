@@ -84,8 +84,14 @@ class NatsStreamingSource(sqlContext: SQLContext,
         this.logger.debug(s"NatsStreamingSource.getBatch() 'end' offset: ${end}")
    
         // 'start' offset will contain previous batch id. We want to use the current batch id contained in the 'end' offset
-        val natsOffset:NatsOffset = (NatsOffset.convert(end)).get
-        val batchInfo:NatsBatchInfo = natsOffset.offset.get
+        val natsOffset = NatsOffset.convert(end).getOrElse {
+            logger.error(s"Failed to convert end offset to NatsOffset: $end")
+            throw new IllegalStateException(s"Invalid offset format: $end")
+        }
+        val batchInfo = natsOffset.offset.getOrElse {
+            logger.error(s"NatsOffset contains no batch info: $natsOffset")
+            throw new IllegalStateException(s"Empty batch info in offset: $natsOffset")
+        }
         val batchIdList:List[String] = batchInfo.batchIdList
         val natsBatch:MutableList[NatsMsg] = MutableList.empty[NatsMsg]
 
@@ -124,8 +130,14 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
     override def commit(end: Offset):Unit = {
         if (!ackNone) {
-            val natsOffset: NatsOffset = NatsOffset.convert(end).get
-            val batchInfo: NatsBatchInfo = natsOffset.offset.get
+            val natsOffset = NatsOffset.convert(end).getOrElse {
+                logger.error(s"Failed to convert end offset to NatsOffset in commit: $end")
+                throw new IllegalStateException(s"Invalid offset format in commit: $end")
+            }
+            val batchInfo = natsOffset.offset.getOrElse {
+                logger.error(s"NatsOffset contains no batch info in commit: $natsOffset")
+                throw new IllegalStateException(s"Empty batch info in commit offset: $natsOffset")
+            }
             val batchIdList: List[String] = batchInfo.batchIdList
             for (batchId <- batchIdList) {
                 getBatchMgr().commitBatch(batchId)

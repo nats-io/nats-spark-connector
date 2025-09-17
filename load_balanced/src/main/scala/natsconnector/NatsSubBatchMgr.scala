@@ -43,11 +43,9 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
 
     val batcher = new Batcher(natsConfig)
     val batcherThread = new Thread(batcher)
-    val timestamp = System.currentTimeMillis()
-    batcherThread.setName(s"NatsBatcher-$timestamp")
     batcherThread.setDaemon(true) // Ensure JVM can exit
     batcherThread.start()
-    val newId = timestamp.toString + batcherThread.getName()
+    val newId = System.currentTimeMillis() + batcherThread.getName()
     
     // Track both batcher and thread for proper lifecycle management
     batcherMap += (newId -> batcher)
