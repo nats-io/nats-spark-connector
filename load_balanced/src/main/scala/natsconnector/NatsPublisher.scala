@@ -16,22 +16,9 @@ import java.time.format.DateTimeFormatter
 import org.apache.log4j.Logger
 
 
-class NatsPublisher {
+class NatsPublisher(natsConfig: NatsConfig) {
   val isLocal = false
-  val nc:Connection = NatsConfigSink.config.nc.get
-  // val js:JetStream = NatsConfigSink.config.js.get
-  // val stream = NatsConfigSink.config.streamName.get
-  
-  // Will we need this functionality?
-  def sendJetStreamMsg(data:String, subject:String):Unit = {
-    //nc.publish(subject, data)
-    if(this.isLocal) {
-      val logger:Logger = NatsLogger.logger
-      logger.debug(s"publishing JetStream msg:${data}")
-    }
-    // val po:PublishOptions = PublishOptions.builder().stream(this.stream).build()
-    // val pa:PublishAck = js.publish(subject, data.getBytes(StandardCharsets.US_ASCII), po)
-  }
+  val nc:Connection = natsConfig.nc.get
 
   def sendNatsMsg(data:String, subject:String):Unit = {
     val headers:Headers = new Headers()
@@ -62,8 +49,7 @@ class NatsPublisher {
   }
 
   def flush():Unit = {
-    val nc:Connection = NatsConfigSink.config.nc.get
-    val duration:Duration = NatsConfigSink.config.flushWaitTime
+    val duration:Duration = natsConfig.flushWaitTime
     
     nc.flush(duration)
   }

@@ -28,15 +28,16 @@ import scala.concurrent.TimeoutException
 class NatsStreamingSource(sqlContext: SQLContext, 
                           metadataPath: String,
                           userDefinedSchema: Option[StructType], 
-                          parameters: Map[String, String])
+                          parameters: Map[String, String],
+                          natsConfig: NatsConfig)
   extends Source {
     val logger:Logger = NatsLogger.logger
     private var currentOffset: NatsOffset = new NatsOffset(None)
-    private var batchMgr:NatsSubBatchMgr = new NatsSubBatchMgr()
+    private var batchMgr:NatsSubBatchMgr = new NatsSubBatchMgr(natsConfig)
     private var payloadCompression:Option[String] = None
     private var lastDeliveredBatchTimestamp:ZonedDateTime = ZonedDateTime.now()
-    private var idleTimeout:Option[Duration] = NatsConfigSource.config.idleTimeout
-    private var ackNone = NatsConfigSource.config.ackNone
+    private var idleTimeout:Option[Duration] = natsConfig.idleTimeout
+    private var ackNone = natsConfig.ackNone
 
     try {
         val compression = parameters("nats.storage.payload-compression")
@@ -46,7 +47,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
 
     override def stop(): Unit = {
-        val nc = NatsConfigSource.config.nc
+        val nc = natsConfig.nc
         try {
             nc.get.drain(Duration.ofSeconds(30))
         } catch {
@@ -59,7 +60,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
     override def getOffset: Option[Offset] = {
         this.logger.info("=====================In NatsStreamingSource.getOffset")
         this.logger.debug(Thread.currentThread().getName())
-        val numListeners = NatsConfigSource.config.numListeners
+        val numListeners = natsConfig.numListeners
         val offsetList: MutableList[String] = MutableList()
         if(currentOffset.offset == None) {
             for(listener <- 0 until numListeners) {
@@ -83,8 +84,14 @@ class NatsStreamingSource(sqlContext: SQLContext,
         this.logger.debug(s"NatsStreamingSource.getBatch() 'end' offset: ${end}")
    
         // 'start' offset will contain previous batch id. We want to use the current batch id contained in the 'end' offset
-        val natsOffset:NatsOffset = (NatsOffset.convert(end)).get
-        val batchInfo:NatsBatchInfo = natsOffset.offset.get
+        val natsOffset = NatsOffset.convert(end).getOrElse {
+            logger.error(s"Failed to convert end offset to NatsOffset: $end")
+            throw new IllegalStateException(s"Invalid offset format: $end")
+        }
+        val batchInfo = natsOffset.offset.getOrElse {
+            logger.error(s"NatsOffset contains no batch info: $natsOffset")
+            throw new IllegalStateException(s"Empty batch info in offset: $natsOffset")
+        }
         val batchIdList:List[String] = batchInfo.batchIdList
         val natsBatch:MutableList[NatsMsg] = MutableList.empty[NatsMsg]
 
@@ -109,8 +116,8 @@ class NatsStreamingSource(sqlContext: SQLContext,
 
         // We have frozen the current batch and while Spark is processing it we start a new batch in the background
         // but only if the idle timeout has not been exceeded
-        if (this.idleTimeout.isEmpty || (idleTimeout.isDefined && Duration.between(this.lastDeliveredBatchTimestamp, ZonedDateTime.now()).compareTo(NatsConfigSource.config.idleTimeout.get) < 0)) {
-            val numListeners = NatsConfigSource.config.numListeners
+        if (this.idleTimeout.isEmpty || (idleTimeout.isDefined && Duration.between(this.lastDeliveredBatchTimestamp, ZonedDateTime.now()).compareTo(natsConfig.idleTimeout.get) < 0)) {
+            val numListeners = natsConfig.numListeners
             val offsetList: MutableList[String] = MutableList()
             for (listener <- 0 until numListeners) {
                 val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
@@ -123,8 +130,14 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
     override def commit(end: Offset):Unit = {
         if (!ackNone) {
-            val natsOffset: NatsOffset = NatsOffset.convert(end).get
-            val batchInfo: NatsBatchInfo = natsOffset.offset.get
+            val natsOffset = NatsOffset.convert(end).getOrElse {
+                logger.error(s"Failed to convert end offset to NatsOffset in commit: $end")
+                throw new IllegalStateException(s"Invalid offset format in commit: $end")
+            }
+            val batchInfo = natsOffset.offset.getOrElse {
+                logger.error(s"NatsOffset contains no batch info in commit: $natsOffset")
+                throw new IllegalStateException(s"Empty batch info in commit offset: $natsOffset")
+            }
             val batchIdList: List[String] = batchInfo.batchIdList
             for (batchId <- batchIdList) {
                 getBatchMgr().commitBatch(batchId)
@@ -134,7 +147,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
     
     private def getBatchMgr():NatsSubBatchMgr = {
         if(this.batchMgr == null)
-            this.batchMgr = new NatsSubBatchMgr()
+            this.batchMgr = new NatsSubBatchMgr(natsConfig)
 
         this.batchMgr
     }
@@ -163,7 +176,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
 
     private def parseZonedDateTime(value:ZonedDateTime):String = {
-        val formatString = NatsConfigSource.config.dateTimeFormat
+        val formatString = natsConfig.dateTimeFormat
         val df = DateTimeFormatter.ofPattern(formatString)
         value.format(df)
     }

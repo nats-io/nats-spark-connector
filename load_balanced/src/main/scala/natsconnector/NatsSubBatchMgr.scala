@@ -1,7 +1,8 @@
 package natsconnector
 
-import scala.collection.mutable.Map
 import scala.collection.mutable.ListBuffer
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.JavaConverters._
 import io.nats.client.Message
 import io.nats.client.impl.NatsJetStreamMetaData
 
@@ -21,14 +22,18 @@ import org.apache.log4j.Logger
 import org.apache.spark.sql.SparkSession
 import java.util.zip
 
-class NatsSubBatchMgr {
+class NatsSubBatchMgr(natsConfig: NatsConfig) {
   val isLocal = false
-  var payloadCompression:Option[String] = None
-  val batchMap:Map[String, List[Message]] = Map.empty[String, List[Message]]
-  var batcherMap:Map[String, Batcher] = Map.empty[String, Batcher]
+  @volatile var payloadCompression:Option[String] = None
+  // Use thread-safe concurrent maps
+  private val batchMap = new ConcurrentHashMap[String, List[Message]]().asScala
+  private val batcherMap = new ConcurrentHashMap[String, Batcher]().asScala
+  private val threadMap = new ConcurrentHashMap[String, Thread]().asScala
+  // Shared publisher to avoid resource leaks
+  private lazy val natsPublisher = new NatsPublisher(natsConfig)
   //val natsSubscriber:NatsSubscriber = new NatsSubscriber()
 
-  def startNewBatch(payloadCompression:Option[String]):String = {
+  def startNewBatch(payloadCompression:Option[String]):String = synchronized {
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
       logger.info("===================In NatsSubBatchMgr.startNewBatch")
@@ -36,27 +41,32 @@ class NatsSubBatchMgr {
 
     this.payloadCompression = payloadCompression
 
-
-    val batcher = new Batcher()
+    val batcher = new Batcher(natsConfig)
     val batcherThread = new Thread(batcher)
+    batcherThread.setDaemon(true) // Ensure JVM can exit
     batcherThread.start()
     val newId = System.currentTimeMillis() + batcherThread.getName()
-    this.batcherMap+=(newId -> batcher)
+    
+    // Track both batcher and thread for proper lifecycle management
+    batcherMap += (newId -> batcher)
+    threadMap += (newId -> batcherThread)
     newId
   }
 
-  def freezeAndGetBatch(batchId:String):List[NatsMsg] = {
+  def freezeAndGetBatch(batchId:String):List[NatsMsg] = synchronized {
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
       logger.info("=====================In NatsSubBatchMgr.freezeAndGetBatch")
     }
     var batch = List.empty[NatsMsg]
-    if(this.batcherMap.contains(batchId)) {
-      val batcher = this.batcherMap(batchId)
-      val b:List[Message] = batcher.stopAndGetBatch()
-      batch = convertBatch(b)
-      this.batcherMap -= (batchId)
-      this.batchMap += (batchId -> b)
+    batcherMap.get(batchId) match {
+      case Some(batcher) =>
+        val b:List[Message] = batcher.stopAndGetBatch()
+        batch = convertBatch(b)
+        batcherMap.remove(batchId)
+        batchMap.put(batchId, b)
+      case None =>
+        // Batch ID not found, return empty batch
     }
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
@@ -68,36 +78,35 @@ class NatsSubBatchMgr {
     batch
   }
 
-  def commitBatch(batchId:String):Boolean = {
+  def commitBatch(batchId:String):Boolean = synchronized {
     if(this.isLocal) {
       val logger:Logger = NatsLogger.logger
       logger.info("======================In NatsSubBatchMgr.commitBatch")
     }
-    var committed = false
-    if(this.batchMap.contains(batchId)) {
-      val batch = this.batchMap(batchId)
-      if(this.isLocal) {
-        val logger:Logger = NatsLogger.logger
-        logger.debug(
-          s"-------- Committed Nats message batch for ID = ${batchId}:\n"
-            + s"${batch.foreach(r => logger.debug("  "+r))}"
-        )
-      }
-      batch.foreach(msg => msg.ack())
-      this.batchMap -= (batchId)
-      committed = true
+    
+    batchMap.get(batchId) match {
+      case Some(batch) =>
+        if(this.isLocal) {
+          val logger:Logger = NatsLogger.logger
+          logger.debug(s"-------- Committed Nats message batch for ID = ${batchId}")
+          batch.foreach(r => logger.debug("  "+r))
+        }
+        batch.foreach(msg => msg.ack())
+        batchMap.remove(batchId)
+        true
+      case None =>
+        false
     }
-    committed
   }
 
   def publishBatch(batch:List[NatsMsg]):Unit = {
-    val natsPublisher:NatsPublisher = new NatsPublisher()
+    // Use shared publisher to avoid resource leaks
     batch.foreach(msg => natsPublisher.sendNatsMsg(msg))
   }
 
-
   def publishMsg(msg:NatsMsg):Unit = {
-    new NatsPublisher().sendNatsMsg(msg)
+    // Use shared publisher to avoid resource leaks  
+    natsPublisher.sendNatsMsg(msg)
   }
 
   private def decompress(inData: Array[Byte]): Array[Byte] = {
@@ -115,7 +124,7 @@ class NatsSubBatchMgr {
 
   private def convertBatch(in:List[Message]):List[NatsMsg] = {
     var buffer:ListBuffer[NatsMsg] = ListBuffer.empty[NatsMsg]
-    val df:DateTimeFormatter = DateTimeFormatter.ofPattern(NatsConfigSource.config.dateTimeFormat)
+    val df:DateTimeFormatter = DateTimeFormatter.ofPattern(natsConfig.dateTimeFormat)
 
    def getHeaders (msg:Message):Option[Map[String, List[String]]] = {
      if (msg.hasHeaders) {
@@ -127,7 +136,7 @@ class NatsSubBatchMgr {
 
          msgHeaders(key)= value.toList
        })
-       Some(msgHeaders)
+       Some(msgHeaders.toMap)
      } else {
        None
      }
@@ -200,29 +209,43 @@ case class NatsMsg(val subject:String, val dateTime:String, val content:Array[By
   }
 }
 
-class Batcher() extends Runnable {
+class Batcher(natsConfig: NatsConfig) extends Runnable {
   var buffer:ListBuffer[Message] = ListBuffer.empty[Message]
-  val natsSubscriber = new NatsSubscriber()
+  val natsSubscriber = new NatsSubscriber(natsConfig)
   @volatile var doRun = true
   @volatile var semaphore = false
 
   override def run(): Unit = {
     this.doRun = true
-    var start = System.currentTimeMillis()
-    while(this.doRun) {
-      pullAndLoadBatch()
+    try {
+      var start = System.currentTimeMillis()
+      while(this.doRun && !Thread.currentThread().isInterrupted()) {
+        pullAndLoadBatch()
+      }
+    } catch {
+      case _: InterruptedException =>
+        Thread.currentThread().interrupt() // Restore interrupt status
+    } finally {
+      try {
+        natsSubscriber.unsubscribe()
+      } catch {
+        case _: Exception => // Ignore cleanup exceptions
+      }
     }
-    natsSubscriber.unsubscribe()
   }
 
-  def stopAndGetBatch():List[Message] = {
+  def stop(): Unit = {
     this.doRun = false
-    while(this.semaphore) {Thread.sleep(10)}
-    val batch = this.buffer.toList
-    batch
+  }
+  
+
+    def stopAndGetBatch():List[Message] = {
+      this.doRun = false
+      while(this.semaphore) {Thread.sleep(10)}
+      this.buffer.toList
   }
 
-  private def pullAndLoadBatch():Unit = {
+  private def   pullAndLoadBatch():Unit = {
     this.semaphore = true
     val msgList = this.natsSubscriber.pullNext()
 
