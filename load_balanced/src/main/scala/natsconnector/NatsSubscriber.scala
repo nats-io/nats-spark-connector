@@ -9,7 +9,6 @@ import org.apache.log4j.Logger
 import java.time.Duration
 import java.util
 import scala.collection.mutable.ListBuffer
-import scala.collection.JavaConversions._
 import java.util.ArrayList
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
 

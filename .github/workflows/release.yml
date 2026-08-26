@@ -42,6 +42,15 @@ jobs:
         sbt clean test package assembly
         ls target/scala-2.12/
 
+    # Same deal as V2: Spark 4 is Scala 2.13 only, lands in target/scala-2.13/ with a
+    # "-spark4" artifact name, and must not `clean` away the Spark 3 jars above.
+    - name: Build Loadbalanced (Spark 4)
+      working-directory: load_balanced
+      run: |
+        echo "Building Loadbalanced for Spark 4"
+        sbt -Dspark.version=4.1.2 test package assembly
+        ls target/scala-2.13/
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -50,6 +59,7 @@ jobs:
           V2/nats-spark-connector/target/scala-2.12/*.jar
           V2/nats-spark-connector/target/scala-2.13/*spark4*.jar
           load_balanced/target/scala-2.12/*.jar
+          load_balanced/target/scala-2.13/*spark4*.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   

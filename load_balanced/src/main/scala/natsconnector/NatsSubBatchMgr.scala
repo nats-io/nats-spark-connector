@@ -8,7 +8,6 @@ import io.nats.client.impl.NatsJetStreamMetaData
 
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import org.apache.hadoop.shaded.com.google.protobuf
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.zip.Inflater

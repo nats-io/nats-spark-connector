@@ -7,7 +7,6 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources.{DataSourceRegister, StreamSinkProvider, StreamSourceProvider}
 import org.apache.spark.sql.types.{StringType, StructField, StructType, TimestampType}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
-import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.log4j.Logger
 import natsconnector.NatsLogger

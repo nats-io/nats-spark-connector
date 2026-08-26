@@ -51,8 +51,33 @@ resending a message. These and other configurations are described in the
 'Spark Streaming Source Options' section.
 
 ## Setting Up to Run the Connector
+### Building the Connector
+The connector is built with sbt. By default it targets Spark 3.3.x / Scala 2.12:
+
+```shell
+sbt assembly
+# -> target/scala-2.12/nats-spark-connector-balanced-assembly-<version>.jar
+```
+
+#### Spark 4
+To build for Spark 4.x, pass the Spark version as a system property:
+
+```shell
+sbt -Dspark.version=4.1.2 assembly
+# -> target/scala-2.13/nats-spark-connector-balanced-spark4-assembly-<version>.jar
+```
+
+Spark 4 requires Java 17+ and only supports Scala 2.13, so a Spark 4 build switches to
+Scala 2.13 and the artifact gets a `-spark4` suffix so it can't be confused with the
+Spark 3 jar. Both the 4.0.x and 4.1.x lines are supported.
+
+The connector uses a couple of Spark-internal APIs (`Source`/`Sink`,
+`internalCreateDataFrame`) whose home changed in Spark 4; the version-specific glue is
+isolated in `src/main/scala-spark3/` and `src/main/scala-spark4/` (`SparkShim`) and the
+build picks the right one based on `spark.version`. The offsets written to the streaming
+checkpoint have the same JSON form in both, so checkpoints are portable across builds.
+
 ### Tying the Connector to Spark
-You may build the code using `sbt assembly` which will create the jar file.
 After placing the jar in a directory of your choice, point Spark to said
 directory by setting the Spark Session builder option "spark.jars".
 

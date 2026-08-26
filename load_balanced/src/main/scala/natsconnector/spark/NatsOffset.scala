@@ -1,14 +1,12 @@
 package natsconnector.spark
 
-import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
-import org.json4s.{Formats, NoTypeHints}
+import org.apache.spark.sql.execution.streaming.Offset
+import org.json4s.{Formats, JNothing, JNull, JObject, NoTypeHints}
+import org.json4s.jackson.JsonMethods.parse
 import org.json4s.jackson.Serialization
 import org.json4s.jackson.Serialization.write
-import org.json4s.jackson.Serialization.read
 import natsconnector.NatsLogger
 import org.apache.log4j.Logger
-
-import java.util.function.LongFunction
 
 case class NatsOffset(offset:Option[NatsBatchInfo]) extends Offset {
   private implicit val formats: Formats = Serialization.formats(NoTypeHints)
@@ -19,19 +17,11 @@ case class NatsOffset(offset:Option[NatsBatchInfo]) extends Offset {
   override def equals(obj: Any): Boolean = {
     obj match {
       case other: NatsOffset => this.offset == other.offset
-      case other: Offset => 
+      case other: Offset =>
         // Try to convert other offset types to NatsOffset for comparison
-        NatsOffset.convert(other) match {
-          case Some(natsOffset) => this.offset == natsOffset.offset
-          case None => false
-        }
+        NatsOffset.convert(other).exists(_.offset == this.offset)
       case jsonString: String =>
-        try {
-          val other = read[NatsOffset](jsonString)
-          this.offset == other.offset
-        } catch {
-          case _: Exception => false
-        }
+        NatsOffset.fromJson(jsonString).exists(_.offset == this.offset)
       case _ => false
     }
   }
@@ -41,32 +31,41 @@ object NatsOffset {
   private implicit val formats: Formats = Serialization.formats(NoTypeHints)
   val logger:Logger = NatsLogger.logger
 
-  def apply(offset: SerializedOffset): NatsOffset = {
-    import org.json4s.jackson.JsonMethods._
+  /**
+   * Rebuild a NatsOffset from its JSON form, i.e. what Spark keeps in the checkpoint's offset
+   * log and hands back after a restart (wrapped in its `SerializedOffset`).
+   *
+   * Accepted shapes are exactly what `NatsOffset.json` produces: `{}` (no batch yet),
+   * `{"offset":null}` and `{"offset":{"batchIdList":[...]}}`. Anything else yields None.
+   */
+  def fromJson(json: String): Option[NatsOffset] = {
     try {
-      // Parse the JSON to extract the nested offset structure
-      val json = parse(offset.json)
-      val offsetJson = (json \ "offset").extractOpt[Option[NatsBatchInfo]]
-      NatsOffset(offsetJson.getOrElse(None))
+      parse(json) match {
+        case JObject(Nil) => Some(NatsOffset(None))
+        case JObject(fields) =>
+          fields.collectFirst { case ("offset", value) => value } match {
+            case Some(JNull) | Some(JNothing) => Some(NatsOffset(None))
+            case Some(value) => Some(NatsOffset(Some(value.extract[NatsBatchInfo])))
+            case None => None
+          }
+        case _ => None
+      }
     } catch {
       case e: Exception =>
-        logger.warn("Failed to parse nested offset structure. Attempting direct deserialization as NatsOffset.", e)
-        // Fallback: try to parse directly as NatsOffset
-        try {
-          read[NatsOffset](offset.json)
-        } catch {
-          case e: Exception =>
-            logger.error("Failed to parse JSON directly as NatsOffset. Returning empty offset as fallback.", e)
-            // Final fallback: return empty offset
-            new NatsOffset(None)
-        }
+        logger.error(s"Failed to parse offset JSON as a NatsOffset: $json", e)
+        None
     }
   }
 
+  /**
+   * Recover a NatsOffset from any offset Spark hands us: either one we produced earlier, or
+   * an opaque offset restored from the checkpoint log. Matching on the JSON rather than on
+   * Spark's `SerializedOffset` class keeps this independent of where that class lives
+   * (it moved between Spark 4.0 and 4.1).
+   */
   def convert(offset: Offset): Option[NatsOffset] = offset match {
     case lo: NatsOffset => Some(lo)
-    case so: SerializedOffset => Some(NatsOffset(so))
-    case _ => None
+    case other => fromJson(other.json)
   }
 }
 
