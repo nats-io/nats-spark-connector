@@ -11,6 +11,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.nats.NatsConnection.withConnection
 import org.apache.spark.sql.nats.NatsRDD._
 
+import java.time.Duration
 import scala.collection.JavaConverters._
 
 object NatsRDD {
@@ -20,6 +21,8 @@ object NatsRDD {
 
 object Ack extends Serializable with Logging {
 
+  private val AckFlushTimeout: Duration = Duration.ofSeconds(10)
+
   def apply(natsConnectionConfig: NatsConnectionConfig, replyTos: Seq[MessageAck]): Unit =
     withConnection(natsConnectionConfig)(conn => {
       logDebug(s"Acking ${replyTos.size} messages")
@@ -27,6 +30,11 @@ object Ack extends Serializable with Logging {
         logDebug(s"Acking: $replyTo")
         conn.publish(replyTo, AckType.AckAck.bodyBytes(-1))
       })
+      // `publish` is fire-and-forget and `Connection.close()` drops whatever is still queued
+      // in the writer, so wait for the server to confirm it has seen every ack before the
+      // connection goes away. Otherwise the tail of a batch is silently left un-acked and
+      // gets redelivered after the ack wait.
+      conn.flush(AckFlushTimeout)
     })
 }
 
