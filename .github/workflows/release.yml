@@ -19,12 +19,21 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     - uses: sbt/setup-sbt@v1    
-    - name: Build V2
+    - name: Build V2 (Spark 3.5)
       working-directory: V2
       run: |
-        echo "Building V2"
+        echo "Building V2 for Spark 3.5"
         sbt clean test package assembly
         ls nats-spark-connector/target/scala-2.12/
+
+    # Spark 4 only supports Scala 2.13, so this lands in target/scala-2.13/ with a
+    # "-spark4" artifact name. No `clean` here: it would wipe the Spark 3.5 jars above.
+    - name: Build V2 (Spark 4)
+      working-directory: V2
+      run: |
+        echo "Building V2 for Spark 4"
+        sbt -Dspark.version=4.1.2 test package assembly
+        ls nats-spark-connector/target/scala-2.13/
 
     - name: Build Loadbalanced
       working-directory: load_balanced
@@ -39,6 +48,7 @@ jobs:
         tag_name: ${{ github.ref_name }}
         files: |
           V2/nats-spark-connector/target/scala-2.12/*.jar
+          V2/nats-spark-connector/target/scala-2.13/*spark4*.jar
           load_balanced/target/scala-2.12/*.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

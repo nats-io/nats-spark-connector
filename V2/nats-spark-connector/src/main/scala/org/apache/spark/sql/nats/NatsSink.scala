@@ -56,9 +56,8 @@ class NatsSink(natsPublisherConfig: NatsPublisherConfig) extends Sink with Loggi
     logInfo(s"addBatch $batchId")
     val connectionConfig = natsPublisherConfig.natsConnectionConfig
     val stream = natsPublisherConfig.stream
-    data
-      .sparkSession
-      .internalCreateDataFrame(data.queryExecution.toRdd, data.schema)
+    SparkShim
+      .internalCreateDataFrame(data.sparkSession, data.queryExecution.toRdd, data.schema)
       .to(NatsSink.schema)
       .as[NatsMessageRow]
       .foreachPartition((iterator: Iterator[NatsMessageRow]) => {

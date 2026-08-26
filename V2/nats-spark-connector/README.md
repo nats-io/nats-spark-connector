@@ -15,6 +15,35 @@ see ["Useful Developer Tools"](https://spark.apache.org/developer-tools.html).
 
 For general NATS development tips, see ["NATS Docs"](https://docs.nats.io).
 
+## Building
+
+The connector is built with sbt. By default it targets Spark 3.5.x and cross-builds
+for Scala 2.12 and 2.13:
+
+```shell
+sbt +test +package +assembly
+# -> nats-spark-connector/target/scala-2.1{2,3}/nats-spark-connector[-assembly]_2.1x-<version>.jar
+```
+
+### Spark 4
+
+To build for Spark 4.x, pass the Spark version as a system property:
+
+```shell
+sbt -Dspark.version=4.1.2 test package assembly
+# -> nats-spark-connector/target/scala-2.13/nats-spark-connector-spark4-assembly-<version>.jar
+```
+
+Spark 4 requires Java 17+ and only supports Scala 2.13, so the cross-build collapses to
+2.13 and the artifact gets a `-spark4` suffix so it can't be confused with the Spark 3.5
+Scala 2.13 jar. Both the 4.0.x and 4.1.x lines are supported.
+
+The connector uses a handful of Spark-internal APIs (`Source`/`Sink`,
+`internalCreateDataFrame`) whose home changed in Spark 4; the version-specific glue is
+isolated in `src/main/scala-spark3/` and `src/main/scala-spark4/` (`SparkShim`) and the
+build picks the right one based on `spark.version`. The streaming offsets written to the
+checkpoint are the same plain numbers in both, so checkpoints are portable across builds.
+
 ## Setting Up to Run the Connector
 ```scala
 val spark = SparkSession
