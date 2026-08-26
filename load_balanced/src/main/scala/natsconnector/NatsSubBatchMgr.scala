@@ -63,6 +63,7 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
         val b:List[Message] = batcher.stopAndGetBatch()
         batch = convertBatch(b)
         batcherMap.remove(batchId)
+        threadMap.remove(batchId) // its loop is done; the thread only has its subscription left to drain
         batchMap.put(batchId, b)
       case None =>
         // Batch ID not found, return empty batch
@@ -96,6 +97,25 @@ class NatsSubBatchMgr(natsConfig: NatsConfig) {
       case None =>
         false
     }
+  }
+
+  /**
+   * Stop every batcher that is still pulling and wait (bounded) for their threads to exit.
+   * Called when the streaming query stops: without it the pull loops outlive the query.
+   * Frozen-but-uncommitted batches are dropped un-acked, so JetStream redelivers them after
+   * the ack wait, which keeps the at-least-once guarantee.
+   */
+  def stop(): Unit = synchronized {
+    batcherMap.values.foreach(_.stop())
+    // a pull loop wakes up at least once per messageReceiveWaitTime; give them that plus a margin
+    val deadline = System.currentTimeMillis() + natsConfig.messageReceiveWaitTime.toMillis + 1000L
+    threadMap.values.foreach { thread =>
+      val remaining = deadline - System.currentTimeMillis()
+      if (remaining > 0) thread.join(remaining)
+    }
+    batcherMap.clear()
+    threadMap.clear()
+    batchMap.clear()
   }
 
   def publishBatch(batch:List[NatsMsg]):Unit = {
@@ -217,8 +237,9 @@ class Batcher(natsConfig: NatsConfig) extends Runnable {
   override def run(): Unit = {
     this.doRun = true
     try {
-      var start = System.currentTimeMillis()
-      while(this.doRun && !Thread.currentThread().isInterrupted()) {
+      // Also stop on our own once the subscription is gone (subscribe failed, drained, or the
+      // connection closed): pullNext() returns immediately then, and this loop would spin.
+      while(this.doRun && !Thread.currentThread().isInterrupted() && natsSubscriber.isActive) {
         pullAndLoadBatch()
       }
     } catch {
@@ -244,13 +265,17 @@ class Batcher(natsConfig: NatsConfig) extends Runnable {
       this.buffer.toList
   }
 
-  private def   pullAndLoadBatch():Unit = {
+  private def pullAndLoadBatch():Unit = {
     this.semaphore = true
-    val msgList = this.natsSubscriber.pullNext()
+    try {
+      val msgList = this.natsSubscriber.pullNext()
 
-    msgList.foreach(msg => {
-      if(msg != null) this.buffer.+=(msg)
-    })
-    this.semaphore = false
+      msgList.foreach(msg => {
+        if(msg != null) this.buffer.+=(msg)
+      })
+    } finally {
+      // never leave the flag up if the pull throws, or stopAndGetBatch() waits on it forever
+      this.semaphore = false
+    }
   }
 }

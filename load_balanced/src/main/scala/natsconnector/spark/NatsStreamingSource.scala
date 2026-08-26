@@ -48,11 +48,14 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
 
     override def stop(): Unit = {
-        val nc = natsConfig.nc
+        // Stop the batcher threads first: they must not outlive the query, and draining the
+        // connection below would invalidate their subscriptions under them anyway.
+        getBatchMgr().stop()
         try {
-            nc.get.drain(Duration.ofSeconds(30))
+            natsConfig.nc.foreach(_.drain(Duration.ofSeconds(30)))
         } catch {
             case e: TimeoutException => this.logger.error(s"Timeout draining NATS connection: ${e.getMessage()}")
+            case e: Exception => this.logger.error(s"Error draining NATS connection: ${e.getMessage()}")
         }
     }
 

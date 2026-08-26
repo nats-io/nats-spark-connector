@@ -52,6 +52,12 @@ class NatsSubscriber(natsConfig: NatsConfig) {
     }
   }
 
+  /**
+   * False once there is nothing left to pull from: the subscribe failed, the subscription was
+   * unsubscribed/drained, or the connection is closed. `pullNext` then returns immediately.
+   */
+  def isActive: Boolean = this.jSub != null && this.jSub.isActive
+
   def pullNext():List[Message] = {
     //var msgArray:Array[Message] = null
     // println(s"Subscription is active:${jSub.isActive()}")
