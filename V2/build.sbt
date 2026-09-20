@@ -12,18 +12,24 @@ licenses := Seq(License.Apache2)
 val Scala212 = "2.12.19"
 val Scala213 = "2.13.13"
 
-ThisBuild / crossScalaVersions := Seq(Scala212, Scala213)
-ThisBuild / scalaVersion := Scala212 // "the" default Scala
+// Spark version to build against. Defaults to the Spark 3.5 line; override with
+//   sbt -Dspark.version=4.1.2 ...
+// Spark 4.x dropped Scala 2.12 and needs Java 17+, so a Spark 4 build collapses the
+// cross-build to Scala 2.13 only. The few Spark-version-specific bits live in
+// nats-spark-connector/src/main/scala-spark{3,4}/ (see `SparkShim`).
+val sparkVersion = sys.props.getOrElse("spark.version", "3.5.1")
+val isSpark4 = sparkVersion.startsWith("4.")
+val natsVersion = "2.22.0"
+val munitVersion = "0.7.29"
+
+ThisBuild / crossScalaVersions := (if (isSpark4) Seq(Scala213) else Seq(Scala212, Scala213))
+ThisBuild / scalaVersion := (if (isSpark4) Scala213 else Scala212) // "the" default Scala
 
 ThisBuild / semanticdbEnabled := true // enable SemanticDB
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision // only required for Scala 2.x
 
 // TODO(@Marcus-Rosti): we HAVE to deploy to maven, I just don't know exactly how
 publishTo := None
-
-val sparkVersion = "3.5.1"
-val natsVersion = "2.22.0"
-val munitVersion = "0.7.29"
 
 // TODO(@Marcus-Rosti): build the other connector styles here
 lazy val root = (project in file("."))
@@ -33,7 +39,12 @@ lazy val root = (project in file("."))
   )
 
 lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).settings(
-  name := "nats-spark-connector",
+  // Spark 4 artifacts get a distinct name so the two Scala 2.13 jars can't be confused:
+  //   nats-spark-connector_2.13-x.y.z.jar        (Spark 3.5)
+  //   nats-spark-connector-spark4_2.13-x.y.z.jar (Spark 4)
+  name := (if (isSpark4) "nats-spark-connector-spark4" else "nats-spark-connector"),
+  Compile / unmanagedSourceDirectories +=
+    (Compile / sourceDirectory).value / (if (isSpark4) "scala-spark4" else "scala-spark3"),
   Compile / scalacOptions ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
       case Some((2, 12))  => List("-Ywarn-unused-import")
@@ -65,6 +76,9 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
     Seq(
       "org.scalameta" %% "munit" % munitVersion
     ).map(_ % Test),
+  // Spark always ships its own scala-library; bundling another copy in the fat jar only
+  // invites NoSuchMethodErrors when the two versions differ (e.g. with userClassPathFirst).
+  assembly / assemblyOption := (assembly / assemblyOption).value.withIncludeScala(false),
   assembly / assemblyShadeRules := Seq(
     ShadeRule.rename("shapeless.**" -> "nats_spark_internal.@1").inAll,
     ShadeRule.rename("cats.kernel.**" -> s"nats_spark_internal.kernel.@1").inAll

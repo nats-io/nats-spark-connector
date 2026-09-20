@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData, MapData}
-import org.apache.spark.sql.execution.streaming._
+import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.nats.NatsConnection.withConnection
 import org.apache.spark.sql.types._
@@ -107,6 +107,31 @@ object MessageToSparkRow {
   }
 }
 
+/**
+ * Offset handed to Spark by [[NatsSource]]. It is a plain counter: every call to
+ * `getOffset` that has work to do bumps it, and `commit(end)` acks the batch that was
+ * built for `end`.
+ *
+ * The JSON form is the bare number, exactly what Spark's own `LongOffset` wrote, so
+ * checkpoints written by earlier releases stay readable. Spark relocated `LongOffset`
+ * and `SerializedOffset` in 4.1, which is why the connector no longer depends on them.
+ */
+final case class NatsOffset(offset: Long) extends Offset {
+  override def json: String = offset.toString
+}
+
+object NatsOffset {
+
+  /**
+   * Recover the counter from any offset Spark hands back: either a [[NatsOffset]] we
+   * produced earlier, or a `SerializedOffset` restored from the checkpoint log.
+   */
+  def extract(offset: Offset): Option[Long] = offset match {
+    case NatsOffset(value) => Option(value)
+    case other => Try(other.json.toLong).toOption
+  }
+}
+
 object NatsSource {
   val schema: StructType = StructType(
     Array(
@@ -161,13 +186,13 @@ class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
     // if there are ANY messages to read, try to read them all
     if (pending > 0) {
       logDebug(s"$pending messages to read ")
-      Option(LongOffset(commitNumber.incrementAndGet()))
+      Option(NatsOffset(commitNumber.incrementAndGet()))
     }
     // if there are any messages to ack, idk, just increment, try to get some more
     // but more importantly, ack every message that needs acking
     else if (commitTracker.nonEmpty) {
       logWarning("In order to ack messages, incrementing offset")
-      Option(LongOffset(commitNumber.incrementAndGet()))
+      Option(NatsOffset(commitNumber.incrementAndGet()))
     }
     // if you've never seen a batch before and the other conditions fail
     else if (commitNumber.get() == initialValue) {
@@ -177,16 +202,19 @@ class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
     // finally, just respond with a "there's nothing to do" offset
     else {
       logDebug("nothing to read and nothing to ack")
-      Option(LongOffset(commitNumber.get()))
+      Option(NatsOffset(commitNumber.get()))
     }
   }
 
   private def getBatchImpl(start: Option[Long], end: Long): DataFrame = {
     val rdd = new NatsRDD(sqlContext.sparkContext, natsSourceParams)
-    val df = sqlContext.internalCreateDataFrame(rdd.map(_._2), NatsSource.schema).cache()
+    val df = SparkShim
+      .internalCreateDataFrame(sqlContext, rdd.map(_._2), NatsSource.schema, isStreaming = false)
+      .cache()
     logDebug(s"expected messages to reply to: ${df.select(col("replyTo")).count()}")
     commitTracker.put(end, df)
-    sqlContext.internalCreateDataFrame(
+    SparkShim.internalCreateDataFrame(
+      sqlContext,
       df.queryExecution.toRdd,
       NatsSource.schema,
       isStreaming = true)
@@ -196,19 +224,11 @@ class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
     logInfo(s"getBatch($start, $end)")
     logDebug(s"commitTracker is ${commitTracker.isEmpty}")
     logDebug(s"commitTracker keys ${commitTracker.keySet}")
-    (start, end) match {
-      case (None, LongOffset(endOff)) =>
-        getBatchImpl(Option.empty[Long], endOff)
-      case (Some(LongOffset(startOff)), LongOffset(endOff)) =>
-        getBatchImpl(Option(startOff), endOff)
-      case (Some(SerializedOffset(json)), LongOffset(endOff)) =>
-        getBatchImpl(Try(json.toLong).toOption, endOff)
-      case (Some(LongOffset(startOff)), endOff: SerializedOffset) =>
-        getBatchImpl(Option(startOff), LongOffset(endOff).offset)
-      case (Some(SerializedOffset(json)), endOff: SerializedOffset) =>
-        getBatchImpl(Try(json.toLong).toOption, LongOffset(endOff).offset)
-      case (maybeOffset, offset) =>
-        logError(s"Invalid offsets in getBatch ($maybeOffset, $offset)")
+    NatsOffset.extract(end) match {
+      case Some(endOff) =>
+        getBatchImpl(start.flatMap(NatsOffset.extract), endOff)
+      case None =>
+        logError(s"Invalid offsets in getBatch ($start, $end)")
         sqlContext.emptyDataFrame.to(schema)
     }
   }
@@ -226,12 +246,10 @@ class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
     logDebug(s"commitTracker is ${commitTracker.isEmpty}")
     logDebug(s"commitTracker keys ${commitTracker.keySet}")
     val connectionConfig = natsSourceParams.natsConnectionConfig
-    end match {
-      case LongOffset(offset) =>
+    NatsOffset.extract(end) match {
+      case Some(offset) =>
         commitTracker.remove(offset).foreach(commitDF(_, connectionConfig))
-      case so: SerializedOffset =>
-        commitTracker.remove(LongOffset(so).offset).foreach(commitDF(_, connectionConfig))
-      case offset: Offset => throw new Exception(s"Invalid Offset :: $offset")
+      case None => throw new Exception(s"Invalid Offset :: $end")
     }
   }
 

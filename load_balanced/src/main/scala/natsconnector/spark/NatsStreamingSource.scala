@@ -15,10 +15,11 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.unsafe.types.{ByteArray, UTF8String}
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.natsconnector.SparkShim
 
 import java.time.{Duration, ZonedDateTime}
 import java.time.format.DateTimeFormatter
-import scala.collection.mutable.MutableList
+import scala.collection.mutable.ListBuffer
 import natsconnector.NatsLogger
 import org.apache.log4j.Logger
 
@@ -47,11 +48,14 @@ class NatsStreamingSource(sqlContext: SQLContext,
     }
 
     override def stop(): Unit = {
-        val nc = natsConfig.nc
+        // Stop the batcher threads first: they must not outlive the query, and draining the
+        // connection below would invalidate their subscriptions under them anyway.
+        getBatchMgr().stop()
         try {
-            nc.get.drain(Duration.ofSeconds(30))
+            natsConfig.nc.foreach(_.drain(Duration.ofSeconds(30)))
         } catch {
             case e: TimeoutException => this.logger.error(s"Timeout draining NATS connection: ${e.getMessage()}")
+            case e: Exception => this.logger.error(s"Error draining NATS connection: ${e.getMessage()}")
         }
     }
 
@@ -61,7 +65,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
         this.logger.info("=====================In NatsStreamingSource.getOffset")
         this.logger.debug(Thread.currentThread().getName())
         val numListeners = natsConfig.numListeners
-        val offsetList: MutableList[String] = MutableList()
+        val offsetList = ListBuffer.empty[String]
         if(currentOffset.offset == None) {
             for(listener <- 0 until numListeners) {
                 val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
@@ -93,7 +97,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
             throw new IllegalStateException(s"Empty batch info in offset: $natsOffset")
         }
         val batchIdList:List[String] = batchInfo.batchIdList
-        val natsBatch:MutableList[NatsMsg] = MutableList.empty[NatsMsg]
+        val natsBatch = ListBuffer.empty[NatsMsg]
 
         for(batchId <- batchIdList) {
             natsBatch ++= getBatchMgr().freezeAndGetBatch(batchId)
@@ -106,8 +110,10 @@ class NatsStreamingSource(sqlContext: SQLContext,
             + s"${rowSeq.foreach(r => this.logger.debug("  "+r))}"
         )
 
-        val df = this.sqlContext.sparkSession.internalCreateDataFrame(
-                                    sqlContext.sparkSession.sparkContext.parallelize(rowSeq),
+        // internalCreateDataFrame is Spark-internal and moved in Spark 4: go through the shim
+        val df = SparkShim.internalCreateDataFrame(
+                                    sqlContext,
+                                    sqlContext.sparkContext.parallelize(rowSeq),
                                     this.schema, isStreaming = true)
 
         if (rowSeq.length != 0) {
@@ -118,7 +124,7 @@ class NatsStreamingSource(sqlContext: SQLContext,
         // but only if the idle timeout has not been exceeded
         if (this.idleTimeout.isEmpty || (idleTimeout.isDefined && Duration.between(this.lastDeliveredBatchTimestamp, ZonedDateTime.now()).compareTo(natsConfig.idleTimeout.get) < 0)) {
             val numListeners = natsConfig.numListeners
-            val offsetList: MutableList[String] = MutableList()
+            val offsetList = ListBuffer.empty[String]
             for (listener <- 0 until numListeners) {
                 val batchId = getBatchMgr().startNewBatch(this.payloadCompression)
                 offsetList += batchId

@@ -27,12 +27,12 @@ class SampleAuthHandler(path:String) extends AuthHandler {
                 var seed:Array[Char] = new Array(numChars)
                 System.arraycopy(buffer, 0, seed, 0, numChars)
                 nKey = NKey.fromSeed(seed);
-                Arrays.fill(seed, '\0') // clear memory
+                Arrays.fill(seed, '\u0000') // clear memory
             }
             else {
                 nKey = NKey.fromSeed(buffer);
             }
-            Arrays.fill(buffer, '\0') // clear memory
+            Arrays.fill(buffer, '\u0000') // clear memory
         }
         catch {
             case ex: Exception => { println(s"Got security exception when acquiring NKey: ${ex.getMessage()}"); System.exit(-1)}

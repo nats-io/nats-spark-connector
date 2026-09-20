@@ -9,7 +9,6 @@ import org.apache.log4j.Logger
 import java.time.Duration
 import java.util
 import scala.collection.mutable.ListBuffer
-import scala.collection.JavaConversions._
 import java.util.ArrayList
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
 
@@ -52,6 +51,12 @@ class NatsSubscriber(natsConfig: NatsConfig) {
         null
     }
   }
+
+  /**
+   * False once there is nothing left to pull from: the subscribe failed, the subscription was
+   * unsubscribed/drained, or the connection is closed. `pullNext` then returns immediately.
+   */
+  def isActive: Boolean = this.jSub != null && this.jSub.isActive
 
   def pullNext():List[Message] = {
     //var msgArray:Array[Message] = null

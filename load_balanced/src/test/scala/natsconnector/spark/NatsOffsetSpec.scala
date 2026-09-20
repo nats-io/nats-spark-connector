@@ -2,12 +2,18 @@ package natsconnector.spark
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.apache.spark.sql.execution.streaming.SerializedOffset
+import org.apache.spark.sql.execution.streaming.Offset
 import org.json4s.{Formats, NoTypeHints}
 import org.json4s.jackson.Serialization
 
 class NatsOffsetSpec extends AnyFlatSpec with Matchers {
   private implicit val formats: Formats = Serialization.formats(NoTypeHints)
+
+  // What Spark hands back after a restart: an opaque Offset carrying the JSON read from the
+  // checkpoint's offset log (Spark's own SerializedOffset, whose package moved in Spark 4.1).
+  private def restoredOffset(serialized: String): Offset = new Offset {
+    override def json: String = serialized
+  }
 
   "NatsOffset" should "serialize and deserialize correctly" in {
     val batchInfo = NatsBatchInfo(List("batch1", "batch2", "batch3"))
@@ -64,15 +70,18 @@ class NatsOffsetSpec extends AnyFlatSpec with Matchers {
     // Test with non-string, non-offset object
     offset.equals(42) should be(false)
     offset.equals(List(1, 2, 3)) should be(false)
+
+    // Its own JSON form compares equal
+    offset.equals(offset.json) should be(true)
   }
 
-  it should "convert from SerializedOffset correctly" in {
+  it should "convert from a restored (serialized) offset correctly" in {
     val batchInfo = NatsBatchInfo(List("batch1", "batch2"))
     val originalOffset = NatsOffset(Some(batchInfo))
-    val serializedOffset = SerializedOffset(originalOffset.json)
+    val serializedOffset = restoredOffset(originalOffset.json)
     
-    val convertedOffset = NatsOffset(serializedOffset)
-    convertedOffset should equal(originalOffset)
+    val convertedOffset = NatsOffset.fromJson(serializedOffset.json)
+    convertedOffset should be(Some(originalOffset))
   }
 
   it should "handle convert method with NatsOffset input" in {
@@ -83,14 +92,20 @@ class NatsOffsetSpec extends AnyFlatSpec with Matchers {
     result should be(Some(offset))
   }
 
-  it should "handle convert method with SerializedOffset input" in {
+  it should "handle convert method with a restored (serialized) offset input" in {
     val batchInfo = NatsBatchInfo(List("batch1", "batch2"))
     val originalOffset = NatsOffset(Some(batchInfo))
-    val serializedOffset = SerializedOffset(originalOffset.json)
+    val serializedOffset = restoredOffset(originalOffset.json)
     
     val result = NatsOffset.convert(serializedOffset)
     result should be(defined)
     result.get should equal(originalOffset)
+  }
+
+  it should "restore the None offset from its serialized forms" in {
+    NatsOffset.convert(restoredOffset(NatsOffset(None).json)) should be(Some(NatsOffset(None)))
+    NatsOffset.convert(restoredOffset("{}")) should be(Some(NatsOffset(None)))
+    NatsOffset.convert(restoredOffset("{\"offset\":null}")) should be(Some(NatsOffset(None)))
   }
 
   it should "return None for unsupported offset types" in {
@@ -102,6 +117,12 @@ class NatsOffsetSpec extends AnyFlatSpec with Matchers {
     result should be(None)
   }
 
+  it should "return None for offsets that are not JSON objects" in {
+    NatsOffset.convert(restoredOffset("42")) should be(None)
+    NatsOffset.convert(restoredOffset("not json")) should be(None)
+    NatsOffset.convert(restoredOffset("[1,2,3]")) should be(None)
+  }
+
   it should "handle empty batch list" in {
     val batchInfo = NatsBatchInfo(List.empty)
     val offset = NatsOffset(Some(batchInfo))
@@ -109,9 +130,9 @@ class NatsOffsetSpec extends AnyFlatSpec with Matchers {
     val json = offset.json
     json should include("\"batchIdList\":[]")
     
-    val serializedOffset = SerializedOffset(json)
-    val convertedOffset = NatsOffset(serializedOffset)
-    convertedOffset should equal(offset)
+    val serializedOffset = restoredOffset(json)
+    val convertedOffset = NatsOffset.convert(serializedOffset)
+    convertedOffset should be(Some(offset))
   }
 
   it should "handle large batch lists" in {
@@ -123,8 +144,8 @@ class NatsOffsetSpec extends AnyFlatSpec with Matchers {
     json should include("batch1")
     json should include("batch1000")
     
-    val serializedOffset = SerializedOffset(json)
-    val convertedOffset = NatsOffset(serializedOffset)
-    convertedOffset should equal(offset)
+    val serializedOffset = restoredOffset(json)
+    val convertedOffset = NatsOffset.convert(serializedOffset)
+    convertedOffset should be(Some(offset))
   }
 }
