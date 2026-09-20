@@ -1,5 +1,5 @@
 name := (if (isSpark4) "nats-spark-connector-balanced-spark4" else "nats-spark-connector-balanced")
-version := "1.2.7"
+version := "1.2.8"
 scalaVersion := (if (isSpark4) Scala213 else Scala212)
 
 // Fix classloader issues for tests
