@@ -46,6 +46,9 @@ libraryDependencies ++= Seq(
   "org.json4s" %% "json4s-jackson" % json4sVersion % Provided,
   "org.scalatest" %% "scalatest" % "3.2.17" % Test,
   "org.scalatestplus" %% "mockito-4-11" % "3.2.17.0" % Test,
+  // Starts a real nats-server (from PATH, or the `nats_server_path` env var) for the tests,
+  // the same way the nats.java test suite does.
+  "io.nats" % "jnats-server-runner" % "4.0.2" % Test,
 )
 
 // Spark always ships its own scala-library; bundling another copy in the fat jar only

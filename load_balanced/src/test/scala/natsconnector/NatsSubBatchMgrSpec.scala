@@ -5,10 +5,10 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.BeforeAndAfterEach
 import java.time.Duration
 
-class NatsSubBatchMgrSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach {
-  
+class NatsSubBatchMgrSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach with NatsTestServer {
+
   var testConfig: NatsConfig = _
-  
+
   override def beforeEach(): Unit = {
     testConfig = new NatsConfig(isSource = true)
   }
@@ -34,55 +34,28 @@ class NatsSubBatchMgrSpec extends AnyFlatSpec with Matchers with BeforeAndAfterE
   }
 
   it should "handle batch size configuration" in {
-    val parameters = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
-      "nats.stream.name" -> "TestStream",
-      "nats.stream.subjects" -> "test.>",
-      "nats.msg.ack.wait.secs" -> "60",
-      "nats.msg.fetch.batch.size" -> "50"
-    )
+    val parameters = natsParams("nats.msg.fetch.batch.size" -> "50")
 
     testConfig.setConnection(parameters)
     testConfig.msgFetchBatchSize should be(50)
   }
 
   it should "handle message acknowledgment timeout" in {
-    val parameters = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
-      "nats.stream.name" -> "TestStream",
-      "nats.stream.subjects" -> "test.>",
-      "nats.msg.ack.wait.secs" -> "120"
-    )
+    val parameters = natsParams("nats.msg.ack.wait.secs" -> "120")
 
     testConfig.setConnection(parameters)
     testConfig.msgAckWaitTime should be(Duration.ofSeconds(120))
   }
 
   it should "handle listener count configuration" in {
-    val parameters = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
-      "nats.stream.name" -> "TestStream",
-      "nats.stream.subjects" -> "test.>",
-      "nats.msg.ack.wait.secs" -> "60",
-      "nats.num.listeners" -> "3"
-    )
+    val parameters = natsParams("nats.num.listeners" -> "3")
 
     testConfig.setConnection(parameters)
     testConfig.numListeners should be(3)
   }
 
   it should "handle datetime format configuration" in {
-    val parameters = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
-      "nats.stream.name" -> "TestStream",
-      "nats.stream.subjects" -> "test.>",
-      "nats.msg.ack.wait.secs" -> "60",
-      "nats.datetime.format" -> "yyyy-MM-dd HH:mm:ss"
-    )
+    val parameters = natsParams("nats.datetime.format" -> "yyyy-MM-dd HH:mm:ss")
 
     testConfig.setConnection(parameters)
     testConfig.dateTimeFormat should be("yyyy-MM-dd HH:mm:ss")
@@ -90,8 +63,8 @@ class NatsSubBatchMgrSpec extends AnyFlatSpec with Matchers with BeforeAndAfterE
 
   it should "validate required parameters for source configuration" in {
     val invalidParams = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222"
+      "nats.host" -> natsHost,
+      "nats.port" -> natsPort
       // Missing required stream.name and other source params
     )
 
