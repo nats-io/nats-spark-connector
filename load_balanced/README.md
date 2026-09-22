@@ -257,6 +257,18 @@ outboundDF.writeStream
     The port to which the connector should listen.
 
 
+## Running the Unit Tests
+```bash
+sbt test                          # Spark 3.3.x / Scala 2.12
+sbt -Dspark.version=4.1.2 test    # Spark 4.x / Scala 2.13
+```
+Some of the tests connect to NATS. They start their own JetStream-enabled `nats-server` on a
+random free port (using [jnats-server-runner](https://github.com/nats-io/java-nats-server-runner),
+like the NATS Java client's own tests) and shut it down afterwards, so no server needs to be
+running, and one that already is won't be touched. The only requirement is a
+[`nats-server`](https://docs.nats.io/running-a-nats-service/introduction/installation)
+executable on the `PATH`, or its absolute path in the `nats_server_path` environment variable.
+
 ## Simple Connector Test
 A simple connector test that reads messages and converts the inbound subjects
 into outbound ones can be found in the repository at

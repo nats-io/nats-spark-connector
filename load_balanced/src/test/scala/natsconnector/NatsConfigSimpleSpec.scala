@@ -6,7 +6,7 @@ import org.scalatest.BeforeAndAfterEach
 import io.nats.client.api.StorageType
 import java.time.Duration
 
-class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach {
+class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfterEach with NatsTestServer {
 
   var sourceConfig: NatsConfig = _
   var sinkConfig: NatsConfig = _
@@ -37,8 +37,8 @@ class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
 
   it should "handle missing required source parameters gracefully" in {
     val missingStreamName = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
+      "nats.host" -> natsHost,
+      "nats.port" -> natsPort,
       "nats.msg.ack.wait.secs" -> "60"
     )
 
@@ -49,7 +49,7 @@ class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
 
   it should "handle missing required sink parameters gracefully" in {
     val missingHost = Map(
-      "nats.port" -> "4222"
+      "nats.port" -> natsPort
     )
 
     an[RuntimeException] should be thrownBy {
@@ -58,12 +58,7 @@ class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
   }
 
   it should "set optional parameters correctly" in {
-    val parameters = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
-      "nats.stream.name" -> "TestStream",
-      "nats.stream.subjects" -> "test.>",
-      "nats.msg.ack.wait.secs" -> "60",
+    val parameters = natsParams(
       "nats.datetime.format" -> "yyyy-MM-dd HH:mm:ss",
       "nats.ack.none" -> "true",
       "nats.num.listeners" -> "5",
@@ -71,12 +66,7 @@ class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
       "nats.connection.timeout" -> "10"
     )
 
-    // This will fail at connection time, but we can test parameter parsing
-    try {
-      sourceConfig.setConnection(parameters)
-    } catch {
-      case _: Exception => // Expected since we don't have a NATS server running
-    }
+    sourceConfig.setConnection(parameters)
 
     sourceConfig.dateTimeFormat should be("yyyy-MM-dd HH:mm:ss")
     sourceConfig.ackNone should be(true)
@@ -86,22 +76,18 @@ class NatsConfigSimpleSpec extends AnyFlatSpec with Matchers with BeforeAndAfter
   }
 
   it should "handle storage type parameters" in {
-    val parameters = Map(
-      "nats.host" -> "localhost",
-      "nats.port" -> "4222",
-      "nats.stream.name" -> "TestStream",
-      "nats.stream.subjects" -> "test.>",
-      "nats.msg.ack.wait.secs" -> "60",
+    // Its own stream: TestStream already exists with file storage, which can't be changed
+    val parameters = natsParams(
+      "nats.stream.name" -> "TestStreamMem",
+      "nats.stream.subjects" -> "testmem.>",
       "nats.storage.type" -> "memory"
     )
 
-    try {
-      sourceConfig.setConnection(parameters)
-    } catch {
-      case _: Exception => // Expected since we don't have a NATS server running
-    }
+    sourceConfig.setConnection(parameters)
 
     sourceConfig.storageType should be(StorageType.Memory)
+    val streamInfo = sourceConfig.nc.get.jetStreamManagement().getStreamInfo("TestStreamMem")
+    streamInfo.getConfiguration.getStorageType should be(StorageType.Memory)
   }
 
   it should "close connection properly" in {

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.project }} (Spark ${{ matrix.spark }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [V2, load_balanced]
+        spark: [default, 4.1.2]
+
+    steps:
+    # The load_balanced tests start their own nats-server (jnats-server-runner, as in nats.java),
+    # they just need the executable on the PATH. Runs before the checkout, which then clears the
+    # nats-server source clone out of the workspace.
+    - name: Install Nats Server
+      if: matrix.project == 'load_balanced'
+      uses: synadia-io/workflows/.github/actions/install_nats_server@main
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'sbt'
+    - uses: sbt/setup-sbt@v1
+
+    - name: Test
+      working-directory: ${{ matrix.project }}
+      run: sbt ${{ matrix.spark != 'default' && format('-Dspark.version={0}', matrix.spark) || '' }} test
+
+    - name: Clean up
+      if: always()
+      run: pkill -9 nats-server 2>/dev/null || true
