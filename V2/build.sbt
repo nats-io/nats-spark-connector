@@ -43,6 +43,8 @@ lazy val `nats-spark-connector` = (project in file("nats-spark-connector")).sett
   //   nats-spark-connector_2.13-x.y.z.jar        (Spark 3.5)
   //   nats-spark-connector-spark4_2.13-x.y.z.jar (Spark 4)
   name := (if (isSpark4) "nats-spark-connector-spark4" else "nats-spark-connector"),
+  Test / fork := true,
+  Test / javaOptions += "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
   Compile / unmanagedSourceDirectories +=
     (Compile / sourceDirectory).value / (if (isSpark4) "scala-spark4" else "scala-spark3"),
   Compile / scalacOptions ++= {

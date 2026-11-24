@@ -23,9 +23,8 @@ object Ack extends Serializable with Logging {
 
   private val AckFlushTimeout: Duration = Duration.ofSeconds(10)
 
-  def apply(natsConnectionConfig: NatsConnectionConfig, replyTos: Seq[MessageAck]): Unit =
+  def apply(natsConnectionConfig: NatsConnectionConfig, replyTos: Iterator[MessageAck]): Unit =
     withConnection(natsConnectionConfig)(conn => {
-      logDebug(s"Acking ${replyTos.size} messages")
       replyTos.foreach(replyTo => {
         logDebug(s"Acking: $replyTo")
         conn.publish(replyTo, AckType.AckAck.bodyBytes(-1))
@@ -76,11 +75,13 @@ class NatsRDD(sc: SparkContext, natsSourceParams: NatsSourceParams)
     logInfo("getPartitions")
     withConnection(natsSourceParams.natsConnectionConfig)(conn => {
       val jetStreamOptions = JetStreamOptions.builder().prefix(natsSourceParams.natsConnectionConfig.jsAPIPrefix).build()
-      val numPending = conn
+      val info = conn
         .jetStream(jetStreamOptions)
         .getConsumerContext(natsSourceParams.streamName, natsSourceParams.consumerName)
         .getConsumerInfo
-        .getNumPending
+
+      // Redeliveries can be available even when there are no never-delivered messages.
+      val numPending = math.max(info.getNumPending, if (info.getNumAckPending > 0) 1L else 0L)
       val parts = Math.ceil(numPending.toDouble / natsSourceParams.batchSize).toInt
       Range.Int(0, parts, 1).map(NatsPartition).toArray
     })

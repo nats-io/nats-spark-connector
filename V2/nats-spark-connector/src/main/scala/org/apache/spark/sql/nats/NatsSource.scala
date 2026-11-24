@@ -11,14 +11,14 @@ import org.apache.spark.sql.nats.NatsConnection.withConnection
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
+import org.apache.hadoop.fs.Path
+
 import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.Inflater
 import scala.collection.JavaConverters._
-import scala.collection.concurrent.TrieMap
 import scala.collection.convert.ImplicitConversions._
 import scala.concurrent.duration._
-import scala.util.Try
 
 object MessageToSparkRow {
 
@@ -107,28 +107,19 @@ object MessageToSparkRow {
   }
 }
 
-/**
- * Offset handed to Spark by [[NatsSource]]. It is a plain counter: every call to
- * `getOffset` that has work to do bumps it, and `commit(end)` acks the batch that was
- * built for `end`.
- *
- * The JSON form is the bare number, exactly what Spark's own `LongOffset` wrote, so
- * checkpoints written by earlier releases stay readable. Spark relocated `LongOffset`
- * and `SerializedOffset` in 4.1, which is why the connector no longer depends on them.
- */
+/** Even offsets identify persisted batches. The following odd offset allows Spark to commit
+ * the data batch when the publisher goes idle. */
 final case class NatsOffset(offset: Long) extends Offset {
-  override def json: String = offset.toString
+  override def json: String = s"""{"natsBatchV1":$offset}"""
 }
 
 object NatsOffset {
+  private val versioned = """\{"natsBatchV1":([0-9]+)\}""".r
 
-  /**
-   * Recover the counter from any offset Spark hands back: either a [[NatsOffset]] we
-   * produced earlier, or a `SerializedOffset` restored from the checkpoint log.
-   */
-  def extract(offset: Offset): Option[Long] = offset match {
-    case NatsOffset(value) => Option(value)
-    case other => Try(other.json.toLong).toOption
+  def index(offset: Offset): Long = offset.json match {
+    case versioned(number) => number.toLong
+    case other => throw new IllegalArgumentException(
+      s"Unsupported NATS checkpoint offset $other. Drain the old consumer and start a new Spark checkpoint.")
   }
 }
 
@@ -149,9 +140,6 @@ object NatsSource {
       StructField("pending", LongType, nullable = true)
     )
   )
-
-  def apply(sqlContext: SQLContext, natsSourceParams: NatsSourceParams): NatsSource =
-    new NatsSource(sqlContext, natsSourceParams)
 }
 
 final case class NatsSourceParams(
@@ -163,97 +151,103 @@ final case class NatsSourceParams(
     payloadCompression: String
 )
 
-class NatsSource(sqlContext: SQLContext, natsSourceParams: NatsSourceParams)
-    extends Source
-    with Logging {
+class NatsSource(sqlContext: SQLContext, params: NatsSourceParams, metadataPath: String)
+    extends Source with Logging {
 
-  private val commitTracker: TrieMap[Long, DataFrame] = TrieMap.empty
-  private val initialValue: Long = -1
-  private val commitNumber: AtomicLong = new AtomicLong(initialValue)
+  private val root = new Path(metadataPath, "nats-batches-v1")
+  private val fs = root.getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
+  fs.mkdirs(root)
+  private val batchName = """batch-([0-9]+)""".r
+  private val latest = new AtomicLong(fs.listStatus(root).iterator.flatMap { status =>
+    status.getPath.getName match {
+      case batchName(id) if fs.exists(new Path(status.getPath, "ready")) => Some(id.toLong)
+      case _ => None
+    }
+  }.foldLeft(-2L)(math.max))
 
   override def schema: StructType = NatsSource.schema
 
-  override def getOffset: Option[Offset] = {
-    logInfo("getOffset")
-    val pending = withConnection(natsSourceParams.natsConnectionConfig)(conn => {
-      val jetStreamOptions = JetStreamOptions.builder().prefix(natsSourceParams.natsConnectionConfig.jsAPIPrefix).build()
-      val consumerInfo = conn
-        .jetStream(jetStreamOptions)
-        .getConsumerContext(natsSourceParams.streamName, natsSourceParams.consumerName)
-        .getConsumerInfo
-      consumerInfo.getNumWaiting + consumerInfo.getNumPending
-    })
-    // if there are ANY messages to read, try to read them all
-    if (pending > 0) {
-      logDebug(s"$pending messages to read ")
-      Option(NatsOffset(commitNumber.incrementAndGet()))
+  private def directory(id: Long): Path = new Path(root, s"batch-$id")
+  private def path(id: Long, name: String): Path = new Path(directory(id), name)
+  private def marked(id: Long, name: String): Boolean = fs.exists(path(id, name))
+  private def mark(id: Long, name: String): Unit = {
+    fs.createNewFile(path(id, name))
+    ()
+  }
+
+  private def records(id: Long): DataFrame =
+    sqlContext.read.schema(schema)
+              .option("ignoreMissingFiles", "false")
+              .option("ignoreCorruptFiles", "false")
+              .parquet(path(id, "rows").toString)
+
+  private def hasDeliveries: Boolean = withConnection(params.natsConnectionConfig) { connection =>
+    val options = JetStreamOptions.builder().prefix(params.natsConnectionConfig.jsAPIPrefix).build()
+    val info = connection.jetStream(options).getConsumerContext(params.streamName, params.consumerName).getConsumerInfo
+    info.getNumPending > 0 || info.getNumAckPending > 0
+  }
+
+  /** Only a single active Spark query may own a checkpoint. An interrupted capture has no
+   * ready marker and no offset or acknowledgment can reference it. */
+  private def capture(id: Long): Boolean = {
+    val batch = directory(id)
+    if (fs.exists(batch)) {
+      require(!marked(id, "ready"), s"Refusing to replace published NATS batch $id")
+      require(fs.delete(batch, true), s"Cannot remove incomplete NATS batch $id")
     }
-    // if there are any messages to ack, idk, just increment, try to get some more
-    // but more importantly, ack every message that needs acking
-    else if (commitTracker.nonEmpty) {
-      logWarning("In order to ack messages, incrementing offset")
-      Option(NatsOffset(commitNumber.incrementAndGet()))
-    }
-    // if you've never seen a batch before and the other conditions fail
-    else if (commitNumber.get() == initialValue) {
-      logDebug("On startup & nothing to read & no previous messages yet to Ack")
-      Option.empty[Offset]
-    }
-    // finally, just respond with a "there's nothing to do" offset
-    else {
-      logDebug("nothing to read and nothing to ack")
-      Option(NatsOffset(commitNumber.get()))
+    val deliveries = new NatsRDD(sqlContext.sparkContext, params)
+    val data = SparkShim.internalCreateDataFrame(sqlContext, deliveries.map(_._2), schema, isStreaming = false)
+    data.write.parquet(path(id, "rows").toString)
+    if (records(id).isEmpty) {
+      fs.delete(batch, true)
+      false
+    } else {
+      mark(id, "ready")
+      latest.set(id)
+      true
     }
   }
 
-  private def getBatchImpl(start: Option[Long], end: Long): DataFrame = {
-    val rdd = new NatsRDD(sqlContext.sparkContext, natsSourceParams)
-    val df = SparkShim
-      .internalCreateDataFrame(sqlContext, rdd.map(_._2), NatsSource.schema, isStreaming = false)
-      .cache()
-    logDebug(s"expected messages to reply to: ${df.select(col("replyTo")).count()}")
-    commitTracker.put(end, df)
-    SparkShim.internalCreateDataFrame(
-      sqlContext,
-      df.queryExecution.toRdd,
-      NatsSource.schema,
-      isStreaming = true)
+  // Keep offering the data offset until Spark requests its batch. Only then offer the
+  // trailing offset: Spark needs a later trigger to call commit on the data offset.
+  // Persist these transitions so restarting the driver cannot skip either step.
+  override def getOffset: Option[Offset] = synchronized {
+    val id = latest.get()
+    if (id >= 0 && !marked(id, "read")) Some(NatsOffset(id))
+    else if (id >= 0 && !marked(id, "acked")) Some(NatsOffset(id + 1))
+    else if (hasDeliveries && capture(id + 2)) Some(NatsOffset(id + 2))
+    else if (id >= 0) Some(NatsOffset(id + 1))
+    else None
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    logInfo(s"getBatch($start, $end)")
-    logDebug(s"commitTracker is ${commitTracker.isEmpty}")
-    logDebug(s"commitTracker keys ${commitTracker.keySet}")
-    NatsOffset.extract(end) match {
-      case Some(endOff) =>
-        getBatchImpl(start.flatMap(NatsOffset.extract), endOff)
-      case None =>
-        logError(s"Invalid offsets in getBatch ($start, $end)")
-        sqlContext.emptyDataFrame.to(schema)
+    val first = start.map(NatsOffset.index).getOrElse(-1L) + 1
+    val last = NatsOffset.index(end)
+    val batches = (first to last).filter(_ % 2 == 0).map { id =>
+      require(marked(id, "ready"), s"Missing NATS checkpoint batch $id")
+      mark(id, "read")
+      records(id).queryExecution.toRdd
+    }
+    val rows = sqlContext.sparkContext.union(batches)
+    SparkShim.internalCreateDataFrame(sqlContext, rows, schema, isStreaming = true)
+  }
+
+  override def commit(end: Offset): Unit = synchronized {
+    val offset = NatsOffset.index(end)
+    val id = offset - offset % 2
+    require(marked(id, "ready"), s"Cannot acknowledge missing NATS checkpoint batch $id")
+    if (!marked(id, "acked")) {
+      val connectionConfig = params.natsConnectionConfig
+      records(id).select(col("replyTo")).foreachPartition((rows: Iterator[Row]) =>
+        Ack(connectionConfig, rows.map(_.getString(0))))
+      mark(id, "acked")
+    }
+    // Keep the latest batch for recovery and retire its predecessor after Spark commits.
+    if (id >= 2 && marked(id - 2, "acked")) {
+      fs.delete(directory(id - 2), true)
+      ()
     }
   }
 
-  private def commitDF(dataFrame: DataFrame, connectionConfig: NatsConnectionConfig): Unit = {
-    dataFrame
-      .select(col("replyTo"))
-      .foreachPartition((iterator: Iterator[Row]) => {
-        Ack(connectionConfig, iterator.map(_.getString(0)).toSeq)
-      })
-    dataFrame.unpersist()
-  }
-  override def commit(end: Offset): Unit = {
-    logInfo(s"commit($end)")
-    logDebug(s"commitTracker is ${commitTracker.isEmpty}")
-    logDebug(s"commitTracker keys ${commitTracker.keySet}")
-    val connectionConfig = natsSourceParams.natsConnectionConfig
-    NatsOffset.extract(end) match {
-      case Some(offset) =>
-        commitTracker.remove(offset).foreach(commitDF(_, connectionConfig))
-      case None => throw new Exception(s"Invalid Offset :: $end")
-    }
-  }
-
-  override def stop(): Unit = {
-    logInfo("stop")
-  }
+  override def stop(): Unit = ()
 }

@@ -36,6 +36,13 @@ jobs:
         cache: 'sbt'
     - uses: sbt/setup-sbt@v1
 
+    - name: Start JetStream for source recovery tests
+      if: matrix.project == 'V2'
+      run: |
+        docker run -d --rm -p 127.0.0.1::4222 --name nats-recovery nats:2.11-alpine -js
+        address=$(docker port nats-recovery 4222/tcp)
+        echo "NATS_TEST_PORT=${address##*:}" >> "$GITHUB_ENV"
+
     - name: Test
       working-directory: ${{ matrix.project }}
       run: sbt ${{ matrix.spark != 'default' && format('-Dspark.version={0}', matrix.spark) || '' }} test

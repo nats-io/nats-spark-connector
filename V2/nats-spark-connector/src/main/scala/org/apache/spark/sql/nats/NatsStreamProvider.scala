@@ -58,7 +58,7 @@ class NatsStreamProvider
 
     }
 
-    NatsSource(
+    new NatsSource(
       sqlContext,
       NatsSourceParams(
         connectionConfig,
@@ -67,7 +67,8 @@ class NatsStreamProvider
         config.batchSize,
         config.maxWait,
         config.subscriptionConfig.payloadCompression
-      )
+      ),
+      metadataPath
     )
   }
 
