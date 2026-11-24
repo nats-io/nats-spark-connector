@@ -158,12 +158,12 @@ class NatsSource(sqlContext: SQLContext, params: NatsSourceParams, metadataPath:
   private val fs = root.getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
   fs.mkdirs(root)
   private val batchName = """batch-([0-9]+)""".r
-  private val latest = new AtomicLong(fs.listStatus(root).iterator.flatMap { status =>
+  private val latest = new AtomicLong(fs.listStatus(root).foldLeft(-2L) { (previous, status) =>
     status.getPath.getName match {
-      case batchName(id) if fs.exists(new Path(status.getPath, "ready")) => Some(id.toLong)
-      case _ => None
+      case batchName(id) if fs.exists(new Path(status.getPath, "ready")) => math.max(previous, id.toLong)
+      case _ => previous
     }
-  }.foldLeft(-2L)(math.max))
+  })
 
   override def schema: StructType = NatsSource.schema
 
