@@ -103,8 +103,22 @@ StructType(
 ```
 
 ### Checkpointing
-I presume there to be some issues with checkpointing; however, to our best efforts
-we have used `consumerSeq` as the offset for spark commits
+Configure a durable Spark checkpoint accessible to the driver and all executors. Give
+each query its own checkpoint and durable pull consumer with explicit acknowledgments.
+The source stages each fetched batch, including payloads and acknowledgment subjects,
+as Parquet under Spark's source metadata directory before exposing its offset. Secure
+that storage as you would the sink. Processing requires an additional write and read
+of each source batch, plus space for the current and previous batch during handover.
+
+On replay, Spark reads the same staged rows. After the sink commits, the source
+acknowledges those rows and retires older snapshots. A single trailing empty offset
+allows Spark to commit the last data batch while the publisher is idle. Broker
+retention, consumer delivery limits and sink idempotency still apply.
+
+**Upgrade:** this source uses versioned offsets. Older counter-only checkpoints have
+no record of batch membership. Quiesce publication, drain the old query, verify its
+sink and consumer acknowledgment floor, then stop it and start the new query with a
+fresh checkpoint. Rolling back likewise requires a coordinated checkpoint cutover.
 
 ### Watermarking
 You can use the timestamp field from nats to watermark your data
